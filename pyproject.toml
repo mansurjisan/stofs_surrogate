@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stofs-surrogate"
+version = "0.1.0"
+description = "GNN-based surrogate model for NOAA STOFS storm surge forecasts"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Mansur Jisan", email = "mansur.jisan@noaa.gov"}
+]
+keywords = ["storm-surge", "gnn", "surrogate-model", "noaa", "stofs", "pytorch"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+]
+
+dependencies = [
+    "torch>=2.0.0",
+    "torch-geometric>=2.4.0",
+    "numpy>=1.24.0",
+    "scipy>=1.10.0",
+    "netCDF4>=1.6.0",
+    "matplotlib>=3.7.0",
+    "pandas>=2.0.0",
+    "tqdm>=4.65.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+]
+viz = [
+    "cartopy>=0.21.0",
+    "cmocean>=3.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/mansurjisan/stofs_surrogate"
+Repository = "https://github.com/mansurjisan/stofs_surrogate"
+Issues = "https://github.com/mansurjisan/stofs_surrogate/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["scripts*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+
+[tool.isort]
+profile = "black"
+line_length = 100

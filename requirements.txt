@@ -1,0 +1,28 @@
+# STOFS Surrogate Model - Requirements
+
+# Core ML
+torch>=2.0.0
+numpy>=1.24.0
+scipy>=1.10.0
+
+# Graph Neural Networks
+torch-geometric>=2.4.0
+torch-scatter
+torch-sparse
+
+# Data handling
+netCDF4>=1.6.0
+pandas>=2.0.0
+
+# Visualization
+matplotlib>=3.7.0
+
+# Progress bars
+tqdm>=4.65.0
+
+# Optional: CO-OPS observations for validation
+# pip install searvey>=0.3.0
+
+# Optional: Advanced visualization
+# pip install cartopy>=0.21.0
+# pip install cmocean>=3.0.0
