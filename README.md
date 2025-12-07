@@ -11,15 +11,31 @@ A deep learning surrogate model for NOAA's Surge and Tide Operational Forecast S
 
 ## Results
 
+### Training Convergence
+
+![Training Progress](docs/figures/optimized_training.png)
+
+*Left: Training and validation loss over 150 epochs. Right: Loss components (MSE, Mass conservation, Smoothness).*
+
 ### Rollout Performance
 
-| Lead Time | RMSE (m) |
-|-----------|----------|
-| t+1h      | 0.057    |
-| t+6h      | 0.195    |
-| t+12h     | 0.317    |
-| t+24h     | 0.449    |
-| t+48h     | 0.296    |
+| Lead Time | RMSE (m) | Correlation |
+|-----------|----------|-------------|
+| t+1h      | 0.057    | - |
+| t+6h      | 0.195    | 0.81 |
+| t+12h     | 0.317    | - |
+| t+24h     | 0.449    | 0.01 |
+| t+48h     | 0.296    | - |
+
+![Rollout Analysis](docs/figures/optimized_rollout_timeseries.png)
+
+*Top-left: Domain-average water surface elevation (predicted vs ground truth). Top-right: RMSE vs forecast hour. Bottom: Scatter plots at t+6h and t+24h lead times.*
+
+### Spatial Predictions
+
+![Spatial Rollout](docs/figures/optimized_rollout.png)
+
+*Spatial comparison of GNN predictions vs STOFS ground truth at multiple forecast hours. Columns show prediction, ground truth, absolute error, and signed error.*
 
 ### Station Validation (48h forecast)
 
@@ -29,6 +45,10 @@ A deep learning surrogate model for NOAA's Surge and Tide Operational Forecast S
 | Sandy Hook | 0.59 | 0.36 |
 | The Battery | 0.46 | 0.53 |
 | Lewes, DE | 0.51 | 0.30 |
+
+![Station Comparison](docs/figures/station_rollout_comparison_dots.png)
+
+*48-hour forecast validation at Mid-Atlantic tide gauge stations. Blue: STOFS ground truth. Orange: GNN predictions.*
 
 ## Installation
 
