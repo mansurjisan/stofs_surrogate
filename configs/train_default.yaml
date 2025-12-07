@@ -1,0 +1,45 @@
+# Default training configuration for STOFS GNN Surrogate
+
+# Model architecture
+model:
+  hidden_dim: 96
+  num_layers: 6
+  static_features: 4
+  forcing_features: 3
+  dropout: 0.1
+
+# Training parameters
+training:
+  batch_size: 1
+  num_epochs: 150
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  scheduler:
+    type: "ReduceLROnPlateau"
+    patience: 15
+    factor: 0.5
+    min_lr: 0.00001
+
+# Data normalization
+normalization:
+  eta_scale: 2.0
+  wind_scale: 15.0
+
+# Domain configuration
+domain:
+  name: "mid_atlantic"
+  lon_min: -76.0
+  lon_max: -73.0
+  lat_min: 38.0
+  lat_max: 41.0
+  max_nodes: 15000
+
+# Paths
+paths:
+  data_dir: "data/processed"
+  checkpoint_dir: "outputs/checkpoints"
+  figure_dir: "outputs/figures"
+
+# Device
+device: "cuda"
+mixed_precision: true
