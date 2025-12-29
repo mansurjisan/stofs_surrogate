@@ -69,6 +69,7 @@ class SWEInspiredGraphBlock(nn.Module):
 
 
 class PhysicsInformedCWLModel(nn.Module):
+    """Model compatible with older checkpoints (uses 'layers')."""
     def __init__(
         self,
         state_dim: int = 1,
@@ -119,6 +120,62 @@ class PhysicsInformedCWLModel(nn.Module):
             h, e = layer(h, edge_index, e)
 
         return self.decoder(h)
+
+
+class PhysicsInformedCWLModelA10G(nn.Module):
+    """Model compatible with A10G checkpoints (uses 'gnn_layers' and deeper decoder)."""
+    def __init__(
+        self,
+        state_dim: int = 1,
+        static_feature_dim: int = 4,
+        forcing_feature_dim: int = 3,
+        edge_feature_dim: int = 3,
+        hidden_dim: int = 96,
+        num_layers: int = 6,
+    ):
+        super().__init__()
+
+        self.hidden_dim = hidden_dim
+
+        node_input_dim = state_dim + static_feature_dim + forcing_feature_dim
+
+        self.node_encoder = nn.Sequential(
+            nn.Linear(node_input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+        )
+
+        self.edge_encoder = nn.Sequential(
+            nn.Linear(edge_feature_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+        )
+
+        self.gnn_layers = nn.ModuleList([
+            SWEInspiredGraphBlock(hidden_dim)
+            for _ in range(num_layers)
+        ])
+
+        self.decoder = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.ReLU(),
+            nn.Linear(hidden_dim // 2, state_dim),
+        )
+
+    def forward(self, x, static_features, forcing_features, edge_index, edge_attr):
+        node_features = torch.cat([x, static_features, forcing_features], dim=-1)
+        h = self.node_encoder(node_features)
+        e = self.edge_encoder(edge_attr)
+
+        for layer in self.gnn_layers:
+            h, e = layer(h, edge_index, e)
+
+        delta = self.decoder(h)
+        return x + delta
 
 
 # ============================================================
@@ -390,12 +447,26 @@ def main():
     forcing_features = config.get('forcing_features', 3)
     eta_scale = config.get('eta_scale', config.get('ETA_SCALE', 2.0))
 
-    model = PhysicsInformedCWLModel(
-        hidden_dim=hidden_dim,
-        num_layers=num_layers,
-        static_feature_dim=static_features,
-        forcing_feature_dim=forcing_features,
-    )
+    # Detect model architecture from state_dict keys
+    state_dict_keys = list(checkpoint_data['model_state_dict'].keys())
+    use_a10g_model = any('gnn_layers' in k for k in state_dict_keys)
+
+    if use_a10g_model:
+        logger.info("Detected A10G model architecture")
+        model = PhysicsInformedCWLModelA10G(
+            hidden_dim=hidden_dim,
+            num_layers=num_layers,
+            static_feature_dim=static_features,
+            forcing_feature_dim=forcing_features,
+        )
+    else:
+        logger.info("Detected standard model architecture")
+        model = PhysicsInformedCWLModel(
+            hidden_dim=hidden_dim,
+            num_layers=num_layers,
+            static_feature_dim=static_features,
+            forcing_feature_dim=forcing_features,
+        )
     model.load_state_dict(checkpoint_data['model_state_dict'])
     model = model.to(device)
     model.eval()

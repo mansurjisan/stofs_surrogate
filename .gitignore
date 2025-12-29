@@ -131,3 +131,15 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Screenshots
+*.png
+
+# Large data directories
+data/
+outputs/
+plots/
+
+# Misc
+phase1
+phase1_completion_report.txt

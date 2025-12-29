@@ -38,6 +38,8 @@ from netCDF4 import Dataset as NCDataset
 from scipy.spatial import Delaunay
 from scipy.interpolate import RegularGridInterpolator
 from scipy.ndimage import gaussian_filter
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend for headless environments
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.gridspec import GridSpec
@@ -142,12 +144,12 @@ MEMORY_CONFIG = {
     'enable_memory_monitoring': True,
 }
 
-# Perturbation parameters
+# Perturbation parameters (increased for more spread)
 PERTURBATION_CONFIG = {
-    'wind_speed_std': 0.15,      # 15% standard deviation
-    'wind_direction_std': 10.0,  # 10 degrees standard deviation
-    'pressure_std': 300.0,       # 300 Pa (3 hPa) standard deviation
-    'initial_cwl_std': 0.02,     # 2 cm standard deviation
+    'wind_speed_std': 0.30,      # 30% standard deviation (was 20%)
+    'wind_direction_std': 25.0,  # 25 degrees standard deviation (was 15)
+    'pressure_std': 600.0,       # 600 Pa (6 hPa) standard deviation (was 400)
+    'initial_cwl_std': 0.08,     # 8 cm standard deviation (was 5 cm)
     'spatial_correlation': 3.0,  # Gaussian smoothing sigma for correlated noise
 }
 
@@ -215,8 +217,8 @@ class SWEInspiredGraphBlock(nn.Module):
 
 
 class PhysicsInformedCWLModel(nn.Module):
-    """GNN model for CWL prediction."""
-    
+    """GNN model for CWL prediction (older architecture with 'layers')."""
+
     def __init__(
         self,
         state_dim: int = 1,
@@ -228,44 +230,183 @@ class PhysicsInformedCWLModel(nn.Module):
         use_checkpointing: bool = False,
     ):
         super().__init__()
-        
+
         self.hidden_dim = hidden_dim
         node_input_dim = state_dim + static_feature_dim + forcing_feature_dim
-        
+
         self.node_encoder = nn.Sequential(
             nn.Linear(node_input_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.LayerNorm(hidden_dim),
         )
-        
+
         self.edge_encoder = nn.Sequential(
             nn.Linear(edge_feature_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.LayerNorm(hidden_dim),
         )
-        
+
         self.layers = nn.ModuleList([
             SWEInspiredGraphBlock(hidden_dim, use_checkpointing=use_checkpointing)
             for _ in range(num_layers)
         ])
-        
+
         self.decoder = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, state_dim),
         )
-    
+
     def forward(self, x, static_features, forcing_features, edge_index, edge_attr):
         node_input = torch.cat([x, static_features, forcing_features], dim=-1)
         h = self.node_encoder(node_input)
         e = self.edge_encoder(edge_attr)
-        
+
         for layer in self.layers:
             h, e = layer(h, edge_index, e)
-        
+
         return self.decoder(h)
+
+
+class PhysicsInformedCWLModelA10G(nn.Module):
+    """GNN model for CWL prediction (A10G architecture with 'gnn_layers' and deeper decoder)."""
+
+    def __init__(
+        self,
+        state_dim: int = 1,
+        static_feature_dim: int = 4,
+        forcing_feature_dim: int = 3,
+        edge_feature_dim: int = 3,
+        hidden_dim: int = 96,
+        num_layers: int = 6,
+    ):
+        super().__init__()
+
+        self.hidden_dim = hidden_dim
+        node_input_dim = state_dim + static_feature_dim + forcing_feature_dim
+
+        self.node_encoder = nn.Sequential(
+            nn.Linear(node_input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+        )
+
+        self.edge_encoder = nn.Sequential(
+            nn.Linear(edge_feature_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+        )
+
+        self.gnn_layers = nn.ModuleList([
+            SWEInspiredGraphBlock(hidden_dim)
+            for _ in range(num_layers)
+        ])
+
+        self.decoder = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.ReLU(),
+            nn.Linear(hidden_dim // 2, state_dim),
+        )
+
+    def forward(self, x, static_features, forcing_features, edge_index, edge_attr):
+        node_input = torch.cat([x, static_features, forcing_features], dim=-1)
+        h = self.node_encoder(node_input)
+        e = self.edge_encoder(edge_attr)
+
+        for layer in self.gnn_layers:
+            h, e = layer(h, edge_index, e)
+
+        delta = self.decoder(h)
+        return x + delta
+
+
+class TemporalMemoryGNN(nn.Module):
+    """GNN with temporal memory and tidal harmonics for resolving phase ambiguity."""
+
+    def __init__(
+        self,
+        state_dim: int = 1,
+        temporal_dim: int = 6,  # η(t-1), dη/dt, + 4 tidal harmonics
+        static_feature_dim: int = 4,
+        forcing_feature_dim: int = 3,
+        edge_feature_dim: int = 3,
+        hidden_dim: int = 128,
+        num_layers: int = 6,
+    ):
+        super().__init__()
+
+        self.hidden_dim = hidden_dim
+        node_input_dim = state_dim + temporal_dim + static_feature_dim + forcing_feature_dim
+
+        self.node_encoder = nn.Sequential(
+            nn.Linear(node_input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+        )
+
+        self.edge_encoder = nn.Sequential(
+            nn.Linear(edge_feature_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+        )
+
+        self.gnn_layers = nn.ModuleList([
+            SWEInspiredGraphBlock(hidden_dim)
+            for _ in range(num_layers)
+        ])
+
+        self.decoder = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.ReLU(),
+            nn.Linear(hidden_dim // 2, state_dim),
+        )
+
+    def forward(self, x, x_prev, dxdt, tidal_harmonics, static_features, forcing, edge_index, edge_attr):
+        node_features = torch.cat([x, x_prev, dxdt, tidal_harmonics, static_features, forcing], dim=-1)
+        h = self.node_encoder(node_features)
+        e = self.edge_encoder(edge_attr)
+
+        for layer in self.gnn_layers:
+            h, e = layer(h, edge_index, e)
+
+        delta = self.decoder(h)
+        output = x + delta
+
+        return output
+
+
+# Tidal harmonic constants for TemporalMemoryGNN
+M2_PERIOD = 12.42  # Principal lunar semi-diurnal (hours)
+S2_PERIOD = 12.00  # Principal solar semi-diurnal (hours)
+EPOCH_DATETIME = datetime(2025, 1, 1, 0, 0, 0)
+DT_HOURS = 1.0  # 1-hour timesteps
+
+
+def compute_tidal_harmonics(global_hour: float, num_nodes: int) -> np.ndarray:
+    """Compute tidal harmonic features for a given global hour."""
+    # M2 tidal constituent (12.42 hour period)
+    phase_m2 = 2.0 * np.pi * global_hour / M2_PERIOD
+    sin_m2 = np.sin(phase_m2)
+    cos_m2 = np.cos(phase_m2)
+
+    # S2 tidal constituent (12.00 hour period)
+    phase_s2 = 2.0 * np.pi * global_hour / S2_PERIOD
+    sin_s2 = np.sin(phase_s2)
+    cos_s2 = np.cos(phase_s2)
+
+    # Broadcast to all nodes [4] -> [num_nodes, 4]
+    tidal_harmonics = np.array([sin_m2, cos_m2, sin_s2, cos_s2], dtype=np.float32)
+    return np.tile(tidal_harmonics, (num_nodes, 1))
 
 
 # ============================================================
@@ -310,13 +451,27 @@ class MeteorologicalPerturbationGenerator:
         return ensembles
     
     def _perturb_single(self, base_forcing: Dict, member_idx: int) -> Dict:
-        """Generate single perturbed forcing."""
+        """Generate single perturbed forcing. Member 0 is control (no perturbations)."""
         perturbed = {}
-        
+
         u10 = base_forcing['u10'].astype(np.float32)
         v10 = base_forcing['v10'].astype(np.float32)
         pressure = base_forcing['pressure'].astype(np.float32)
-        
+
+        # Member 0 is control - no perturbations
+        if member_idx == 0:
+            perturbed['u10'] = u10.copy()
+            perturbed['v10'] = v10.copy()
+            perturbed['pressure'] = pressure.copy()
+            perturbed['_perturbation_params'] = {
+                'member_idx': 0,
+                'wind_scale': 1.0,
+                'wind_rotation_deg': 0.0,
+                'pressure_offset_pa': 0.0,
+                'is_control': True,
+            }
+            return perturbed
+
         # 1. Wind speed perturbation (multiplicative)
         wind_scale = 1.0 + self.rng.normal(0, self.config['wind_speed_std'])
         wind_scale = np.clip(wind_scale, 0.5, 1.5)  # Limit to ±50%
@@ -494,28 +649,33 @@ class EnsembleForecaster:
     """
     Main class for running ensemble forecasts.
     """
-    
+
     def __init__(
         self,
         model: nn.Module,
         mesh_data: Dict,
         device: torch.device = None,
+        model_type: str = 'standard',
+        forecast_start_time: datetime = None,
     ):
         self.model = model
         self.mesh_data = mesh_data
         self.device = device or torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        
+        self.model_type = model_type  # 'standard', 'a10g', or 'temporal_memory'
+        self.forecast_start_time = forecast_start_time or datetime(2025, 11, 28)
+
         self.model.to(self.device)
         self.model.eval()
-        
+
         # Precompute static mesh features
         self._prepare_mesh_features()
-        
+
         # Perturbation generators
         self.met_perturber = MeteorologicalPerturbationGenerator()
         self.ic_perturber = InitialConditionPerturbationGenerator()
-        
+
         logger.info(f"EnsembleForecaster initialized on {self.device}")
+        logger.info(f"Model type: {self.model_type}")
         logger.info(f"Mesh: {self.num_nodes} nodes, {self.edge_index.shape[1]} edges")
     
     def _prepare_mesh_features(self):
@@ -589,40 +749,103 @@ class EnsembleForecaster:
     ) -> np.ndarray:
         """
         Run single deterministic forecast.
-        
+
         Args:
             initial_cwl: Initial water level [N]
             forcing: Forcing dictionary with u10, v10, pressure [T, N]
             forecast_hours: Number of hours to forecast
-            
+
         Returns:
             predictions: [forecast_hours + 1, N]
         """
+        if self.model_type == 'temporal_memory':
+            return self._run_temporal_memory_forecast(initial_cwl, forcing, forecast_hours)
+        else:
+            return self._run_standard_forecast(initial_cwl, forcing, forecast_hours)
+
+    def _run_standard_forecast(
+        self,
+        initial_cwl: np.ndarray,
+        forcing: Dict,
+        forecast_hours: int,
+    ) -> np.ndarray:
+        """Run forecast with standard/A10G model."""
         predictions = [initial_cwl.copy()]
-        
+
         current_cwl = initial_cwl / ETA_SCALE
         current_cwl_tensor = torch.tensor(
             current_cwl, dtype=torch.float32
         ).to(self.device)
-        
+
         with torch.no_grad():
             for t in range(forecast_hours):
                 # Prepare features
                 static_features = self._prepare_static_features(current_cwl)
                 forcing_features = self._prepare_forcing_features(forcing, t)
-                
+
                 # Model prediction
                 x = current_cwl_tensor.unsqueeze(1)
                 pred = self.model(
                     x, static_features, forcing_features,
                     self.edge_index, self.edge_attr
                 ).squeeze()
-                
+
                 # Update state
                 current_cwl_tensor = pred
                 current_cwl = pred.cpu().numpy()
                 predictions.append(current_cwl * ETA_SCALE)
-        
+
+        return np.array(predictions)
+
+    def _run_temporal_memory_forecast(
+        self,
+        initial_cwl: np.ndarray,
+        forcing: Dict,
+        forecast_hours: int,
+    ) -> np.ndarray:
+        """Run forecast with TemporalMemoryGNN model (includes tidal harmonics)."""
+        predictions = [initial_cwl.copy()]
+
+        # Initialize with two timesteps for temporal memory
+        cwl_prev = initial_cwl / ETA_SCALE
+        cwl_curr = initial_cwl / ETA_SCALE  # Start with same value
+
+        current_prev = torch.tensor(cwl_prev, dtype=torch.float32).unsqueeze(1).to(self.device)
+        current_cwl = torch.tensor(cwl_curr, dtype=torch.float32).unsqueeze(1).to(self.device)
+
+        # Compute base time for tidal harmonics
+        base_hours = (self.forecast_start_time - EPOCH_DATETIME).total_seconds() / 3600.0
+
+        with torch.no_grad():
+            for t in range(forecast_hours):
+                # Compute temporal features
+                dxdt = (current_cwl - current_prev) / DT_HOURS
+
+                # Compute tidal harmonics for this timestep
+                global_hour = base_hours + t
+                tidal = compute_tidal_harmonics(global_hour, self.num_nodes)
+                tidal_tensor = torch.tensor(tidal, dtype=torch.float32).to(self.device)
+
+                # Prepare static and forcing features
+                cwl_np = current_cwl.squeeze().cpu().numpy() * ETA_SCALE
+                static_features = self._prepare_static_features(cwl_np / ETA_SCALE)
+                forcing_features = self._prepare_forcing_features(forcing, t)
+
+                # Model prediction
+                pred = self.model(
+                    current_cwl, current_prev, dxdt, tidal_tensor,
+                    static_features, forcing_features,
+                    self.edge_index, self.edge_attr
+                )
+
+                # Store prediction
+                pred_cwl = pred.squeeze().cpu().numpy() * ETA_SCALE
+                predictions.append(pred_cwl)
+
+                # Update temporal state
+                current_prev = current_cwl
+                current_cwl = pred
+
         return np.array(predictions)
     
     def run_ensemble(
@@ -919,9 +1142,10 @@ def plot_ensemble_spaghetti(
     forecast_start_time: datetime = None,
     fetch_obs: bool = True,
     datum: str = 'MSL',
+    ground_truth: np.ndarray = None,
 ):
     """
-    Create spaghetti plots for key stations with optional observations.
+    Create spaghetti plots for key stations with optional observations and ground truth.
 
     Args:
         ensemble_results: Dictionary with ensemble predictions
@@ -932,6 +1156,7 @@ def plot_ensemble_spaghetti(
         forecast_start_time: Start time of forecast (for fetching obs)
         fetch_obs: Whether to fetch and plot observations
         datum: Vertical datum for observations
+        ground_truth: STOFS ground truth data [T, N] (optional)
     """
     os.makedirs(output_dir, exist_ok=True)
 
@@ -967,6 +1192,15 @@ def plot_ensemble_spaghetti(
 
         fig, ax = plt.subplots(figsize=(12, 6))
 
+        # Plot ground truth first (so it appears behind ensemble)
+        gt_plotted = False
+        if ground_truth is not None:
+            gt_times = min(n_times, ground_truth.shape[0])
+            gt_ts = ground_truth[:gt_times, node_idx]
+            x_axis = times[:gt_times] if use_datetime_axis else hours[:gt_times]
+            ax.plot(x_axis, gt_ts, 'k-', linewidth=2.5, label='STOFS Ground Truth', zorder=4)
+            gt_plotted = True
+
         # Fetch observations if available
         obs_data = None
         if fetch_obs and SEARVEY_AVAILABLE and forecast_start_time is not None:
@@ -980,7 +1214,7 @@ def plot_ensemble_spaghetti(
                     datum=datum,
                 )
 
-        # Plot observations first (so they appear behind ensemble)
+        # Plot observations (so they appear behind ensemble)
         obs_plotted = False
         if obs_data is not None and len(obs_data) > 0:
             # Get water level column
@@ -992,7 +1226,7 @@ def plot_ensemble_spaghetti(
                 wl_col = obs_data.columns[0]
 
             ax.plot(obs_data.index, obs_data[wl_col],
-                   'ko', markersize=3, alpha=0.6, label='CO-OPS Obs', zorder=5)
+                   'ro', markersize=3, alpha=0.6, label='CO-OPS Obs', zorder=5)
             obs_plotted = True
 
         # Individual ensemble members
@@ -1040,8 +1274,10 @@ def plot_ensemble_spaghetti(
 
         ax.set_ylabel(f'Coastal Water Level (m, {datum})', fontsize=12)
 
-        # Title with obs info
+        # Title with ground truth and obs info
         title = f'Ensemble Forecast - {station_name}\n{n_members} members'
+        if gt_plotted:
+            title += ' | with STOFS GT'
         if obs_plotted:
             title += f' | CO-OPS: {coords.get("coops_id", "N/A")}'
         ax.set_title(title, fontsize=14)
@@ -1391,17 +1627,20 @@ def load_initial_condition(
 def load_from_preprocessed(
     preprocessed_path: str,
     forecast_hours: int = 48,
-) -> Tuple[np.ndarray, Dict]:
+    return_ground_truth: bool = False,
+) -> Tuple[np.ndarray, Dict, Optional[np.ndarray]]:
     """
     Load initial condition and forcing from preprocessed data.
 
     Args:
         preprocessed_path: Path to preprocessed .npz file
         forecast_hours: Number of forecast hours to load
+        return_ground_truth: Whether to also return ground truth elevation
 
     Returns:
         initial_cwl: Initial water level [N] - in physical units (meters)
         forcing: Dictionary with u10, v10, pressure [T, N]
+        ground_truth: Full elevation time series [T, N] (if return_ground_truth=True)
     """
     data = np.load(preprocessed_path)
 
@@ -1442,7 +1681,16 @@ def load_from_preprocessed(
         'pressure': pressure,
     }
 
+    # Prepare ground truth if requested
+    ground_truth = None
+    if return_ground_truth:
+        # Get full elevation series, replace NaN with 0
+        ground_truth = np.where(np.isnan(elevation), 0.0, elevation)
+
     data.close()
+
+    if return_ground_truth:
+        return initial_cwl, forcing, ground_truth
     return initial_cwl, forcing
 
 
@@ -1503,6 +1751,8 @@ Example for RTX 3050 (4GB):
                        help='Forecast cycle hour (default: 00)')
     parser.add_argument('--preprocessed', type=str, default=None,
                        help='Path to preprocessed .npz file (overrides forecast_date/cycle)')
+    parser.add_argument('--mesh', type=str, default=None,
+                       help='Path to mesh .npz file (default: auto-detect)')
 
     args = parser.parse_args()
 
@@ -1550,53 +1800,114 @@ Example for RTX 3050 (4GB):
         logger.info(f"Memory config: cache_clear_interval={memory_config['cache_clear_interval']}, "
                    f"float16={memory_config['use_float16_storage']}")
 
-    # Load mesh - use optimized mesh if available
-    mesh_path_optimized = f'{OUTPUT_DIR}/data/processed_optimized/mesh_optimized.npz'
-    mesh_path_default = f'{OUTPUT_DIR}/data/processed/midatlantic_mesh_v5.npz'
-    mesh_path = mesh_path_optimized if os.path.exists(mesh_path_optimized) else mesh_path_default
+    # Load mesh - use provided path, or auto-detect
+    if args.mesh:
+        mesh_path = args.mesh
+    else:
+        # Try paths in order of preference
+        mesh_paths = [
+            f'{OUTPUT_DIR}/data/processed_25k/mesh_25k.npz',  # 25k mesh
+            f'{OUTPUT_DIR}/data/processed_optimized/mesh_optimized.npz',  # optimized mesh
+            f'{OUTPUT_DIR}/data/processed/midatlantic_mesh_v5.npz',  # default mesh
+        ]
+        mesh_path = None
+        for mp in mesh_paths:
+            if os.path.exists(mp):
+                mesh_path = mp
+                break
+        if mesh_path is None:
+            logger.error("No mesh file found!")
+            return
     logger.info(f"\nLoading mesh from {mesh_path}")
     mesh_data = load_mesh_data(mesh_path)
 
-    # Load model
-    checkpoint_path = f'{CHECKPOINT_DIR}/{args.checkpoint}'
+    # Load model - support both filename and full path
+    if os.path.isabs(args.checkpoint) or os.path.exists(args.checkpoint):
+        checkpoint_path = args.checkpoint
+    else:
+        checkpoint_path = f'{CHECKPOINT_DIR}/{args.checkpoint}'
     logger.info(f"Loading model from {checkpoint_path}")
 
     checkpoint = torch.load(checkpoint_path, map_location='cpu')
     config = checkpoint['config']
 
-    model = PhysicsInformedCWLModel(
-        state_dim=1,
-        static_feature_dim=config['static_features'],
-        forcing_feature_dim=config['forcing_features'],
-        hidden_dim=config['hidden_dim'],
-        num_layers=config['num_layers'],
-        use_checkpointing=False,  # Not needed for inference
-    )
+    # Auto-detect model architecture from state_dict keys and config
+    state_dict_keys = list(checkpoint['model_state_dict'].keys())
+    model_type_config = config.get('model_type', '')
+    has_gnn_layers = any('gnn_layers' in k for k in state_dict_keys)
+    has_temporal_features = config.get('temporal_features', 0) > 2
+
+    # Detect TemporalMemoryGNN
+    if model_type_config == 'TemporalMemoryGNN' or has_temporal_features:
+        logger.info("Detected TemporalMemoryGNN architecture (temporal memory + tidal harmonics)")
+        model = TemporalMemoryGNN(
+            state_dim=1,
+            temporal_dim=config.get('temporal_features', 6),
+            static_feature_dim=config['static_features'],
+            forcing_feature_dim=config['forcing_features'],
+            hidden_dim=config['hidden_dim'],
+            num_layers=config['num_layers'],
+        )
+        model_type = 'temporal_memory'
+    elif has_gnn_layers:
+        logger.info("Detected A10G model architecture (gnn_layers)")
+        model = PhysicsInformedCWLModelA10G(
+            state_dim=1,
+            static_feature_dim=config['static_features'],
+            forcing_feature_dim=config['forcing_features'],
+            hidden_dim=config['hidden_dim'],
+            num_layers=config['num_layers'],
+        )
+        model_type = 'a10g'
+    else:
+        logger.info("Detected standard model architecture (layers)")
+        model = PhysicsInformedCWLModel(
+            state_dim=1,
+            static_feature_dim=config['static_features'],
+            forcing_feature_dim=config['forcing_features'],
+            hidden_dim=config['hidden_dim'],
+            num_layers=config['num_layers'],
+            use_checkpointing=False,  # Not needed for inference
+        )
+        model_type = 'standard'
     model.load_state_dict(checkpoint['model_state_dict'])
-    
+
+    # Parse forecast start time
+    forecast_start_time = datetime.strptime(
+        f"{args.forecast_date}{args.forecast_cycle}", "%Y%m%d%H"
+    )
+
     # Initialize forecaster
-    forecaster = EnsembleForecaster(model, mesh_data, device)
+    forecaster = EnsembleForecaster(
+        model, mesh_data, device,
+        model_type=model_type,
+        forecast_start_time=forecast_start_time
+    )
 
     # Load forcing and initial condition
     # Check if preprocessed data is provided or use default
     preprocessed_path = args.preprocessed
     if preprocessed_path is None:
-        # Try to find preprocessed data for the forecast date
-        preprocessed_path = f'{OUTPUT_DIR}/data/processed_optimized/processed_{args.forecast_date}.npz'
+        # Try to find preprocessed data for the forecast date (25k first, then optimized)
+        for pdir in ['processed_25k', 'processed_optimized']:
+            path_candidate = f'{OUTPUT_DIR}/data/{pdir}/processed_{args.forecast_date}.npz'
+            if os.path.exists(path_candidate):
+                preprocessed_path = path_candidate
+                break
+        if preprocessed_path is None:
+            preprocessed_path = f'{OUTPUT_DIR}/data/processed_optimized/processed_{args.forecast_date}.npz'
 
-    # Parse forecast start time for observation fetching
-    forecast_start_time = datetime.strptime(
-        f"{args.forecast_date}{args.forecast_cycle}", "%Y%m%d%H"
-    )
     logger.info(f"Forecast start time: {forecast_start_time}")
 
+    ground_truth = None
     if os.path.exists(preprocessed_path):
         logger.info(f"\nLoading from preprocessed: {preprocessed_path}")
-        initial_cwl, forcing = load_from_preprocessed(
-            preprocessed_path, args.forecast_hours
+        initial_cwl, forcing, ground_truth = load_from_preprocessed(
+            preprocessed_path, args.forecast_hours, return_ground_truth=True
         )
         logger.info(f"  Initial CWL shape: {initial_cwl.shape}")
         logger.info(f"  Forcing u10 shape: {forcing['u10'].shape}")
+        logger.info(f"  Ground truth shape: {ground_truth.shape}")
     else:
         # Fall back to original loading method
         date_dir = f'stofs_2d_glo.{args.forecast_date}'
@@ -1661,6 +1972,7 @@ Example for RTX 3050 (4GB):
         forecast_start_time=forecast_start_time,
         fetch_obs=not args.no_obs,
         datum=args.datum,
+        ground_truth=ground_truth,
     )
     
     plot_exceedance_maps(
