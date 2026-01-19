@@ -47,10 +47,24 @@ MAX_WORKERS = 4
 def get_cwl_dates():
     """Get all dates that have CWL data."""
     dates = []
-    for d in STOFS_DATA_DIR.iterdir():
-        if d.is_dir() and d.name.isdigit() and len(d.name) == 8:
-            dates.append(d.name)
+    if STOFS_DATA_DIR.exists():
+        for d in STOFS_DATA_DIR.iterdir():
+            if d.is_dir() and d.name.isdigit() and len(d.name) == 8:
+                dates.append(d.name)
     return sorted(dates)
+
+
+def generate_date_range(start_date, end_date):
+    """Generate list of dates between start and end (inclusive)."""
+    from datetime import datetime, timedelta
+    start = datetime.strptime(start_date, '%Y%m%d')
+    end = datetime.strptime(end_date, '%Y%m%d')
+    dates = []
+    current = start
+    while current <= end:
+        dates.append(current.strftime('%Y%m%d'))
+        current += timedelta(days=1)
+    return dates
 
 
 def download_file(date_str, fhr, output_path):
@@ -64,20 +78,18 @@ def download_file(date_str, fhr, output_path):
 
 
 def extract_region(grib_path, bbox):
-    """Extract regional subset using pygrib."""
+    """Extract regional subset using pygrib (two-pass to handle variable order)."""
     import pygrib
 
     grbs = pygrib.open(str(grib_path))
     data = {}
 
+    # First pass: find 10u to get grid indices
     for grb in grbs:
-        name = grb.shortName
-
-        if name == '10u':
+        if grb.shortName == '10u':
             lats, lons = grb.latlons()
             lons = np.where(lons > 180, lons - 360, lons)
 
-            # Find region indices
             lat_mask = (lats[:, 0] >= bbox['lat_min']) & (lats[:, 0] <= bbox['lat_max'])
             lon_mask = (lons[0, :] >= bbox['lon_min']) & (lons[0, :] <= bbox['lon_max'])
 
@@ -85,7 +97,8 @@ def extract_region(grib_path, bbox):
             lon_idx = np.where(lon_mask)[0]
 
             if len(lat_idx) == 0 or len(lon_idx) == 0:
-                continue
+                grbs.close()
+                return None
 
             i0, i1 = lat_idx[0], lat_idx[-1] + 1
             j0, j1 = lon_idx[0], lon_idx[-1] + 1
@@ -93,18 +106,38 @@ def extract_region(grib_path, bbox):
             data['u10'] = grb.values[i0:i1, j0:j1].astype(np.float32)
             data['lat'] = lats[i0:i1, j0:j1].astype(np.float32)
             data['lon'] = lons[i0:i1, j0:j1].astype(np.float32)
-            data['shape'] = (i1-i0, j1-j0)
-            data['i0'] = i0
-            data['j0'] = j0
+            data['_slice'] = (i0, i1, j0, j1)
+            break
 
-        elif name == '10v' and 'shape' in data:
-            data['v10'] = grb.values[data['i0']:data['i0']+data['shape'][0],
-                                     data['j0']:data['j0']+data['shape'][1]].astype(np.float32)
+    if '_slice' not in data:
+        grbs.close()
+        return None
 
-        elif name in ['sp', 'pres'] and grb.typeOfLevel == 'surface' and 'shape' in data:
-            data['sp'] = grb.values[data['i0']:data['i0']+data['shape'][0],
-                                    data['j0']:data['j0']+data['shape'][1]].astype(np.float32)
+    i0, i1, j0, j1 = data['_slice']
 
+    # Second pass: get v10 and pressure
+    grbs.seek(0)
+    for grb in grbs:
+        name = grb.shortName
+        level_type = grb.typeOfLevel
+
+        if name == '10v':
+            data['v10'] = grb.values[i0:i1, j0:j1].astype(np.float32)
+
+        # Surface pressure
+        elif name in ['sp', 'pres', 'SP', 'PRES'] and level_type == 'surface':
+            vals = grb.values[i0:i1, j0:j1].astype(np.float32)
+            if vals.mean() > 50000 and vals.mean() < 110000:
+                data['sp'] = vals
+
+        # Mean sea level pressure as fallback
+        elif name in ['prmsl', 'PRMSL', 'msl'] and level_type == 'meanSea':
+            if 'sp' not in data:
+                vals = grb.values[i0:i1, j0:j1].astype(np.float32)
+                if vals.mean() > 90000 and vals.mean() < 110000:
+                    data['sp'] = vals
+
+    del data['_slice']
     grbs.close()
     return data
 
@@ -132,13 +165,13 @@ def download_and_extract(args):
     return fhr, None
 
 
-def process_date(date_str):
+def process_date(date_str, force=False):
     """Download and process all GFS files for one date using parallel downloads."""
     output_dir = GFS_OUTPUT_DIR / date_str
     output_file = output_dir / f"gfs_{date_str}_regional.npz"
 
-    # Skip if already done
-    if output_file.exists() and output_file.stat().st_size > 1000:
+    # Skip if already done (unless force)
+    if not force and output_file.exists() and output_file.stat().st_size > 1000:
         print(f"{date_str}: Already done", flush=True)
         return True
 
@@ -174,7 +207,12 @@ def process_date(date_str):
                         all_fhr.append(fhr_result)
                         all_u10.append(data['u10'])
                         all_v10.append(data['v10'])
-                        all_sp.append(data.get('sp', np.zeros_like(data['u10'])))
+                        # Use pressure if found, otherwise use standard atmosphere
+                        if 'sp' in data:
+                            all_sp.append(data['sp'])
+                        else:
+                            # Use 101325 Pa (standard atmosphere) instead of zeros
+                            all_sp.append(np.full_like(data['u10'], 101325.0))
                         if lat is None:
                             lat = data['lat']
                             lon = data['lon']
@@ -213,27 +251,37 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('dates', nargs='*', help='Dates (YYYYMMDD)')
     parser.add_argument('--all', action='store_true', help='All CWL dates')
+    parser.add_argument('--date-range', nargs=2, metavar=('START', 'END'),
+                        help='Process date range (no STOFS data needed)')
+    parser.add_argument('--output-dir', type=str, help='Output directory')
     parser.add_argument('--workers', type=int, default=4, help='Parallel downloads (default: 4)')
+    parser.add_argument('--force', action='store_true', help='Reprocess existing files')
     args = parser.parse_args()
 
-    global MAX_WORKERS
+    global MAX_WORKERS, GFS_OUTPUT_DIR
     MAX_WORKERS = args.workers
+    if args.output_dir:
+        GFS_OUTPUT_DIR = Path(args.output_dir)
 
-    if args.all:
+    if args.date_range:
+        dates = generate_date_range(args.date_range[0], args.date_range[1])
+        print(f"Generated {len(dates)} dates from range")
+    elif args.all:
         dates = get_cwl_dates()
     elif args.dates:
-        # Filter to only dates that have CWL data
-        cwl_dates = set(get_cwl_dates())
-        dates = [d for d in args.dates if d in cwl_dates]
-        if len(dates) < len(args.dates):
-            print(f"Note: {len(args.dates) - len(dates)} dates skipped (no CWL data)")
+        dates = [d for d in args.dates if d.isdigit() and len(d) == 8]
     else:
         parser.print_help()
+        print("\nExamples:")
+        print("  python download_gfs_simple.py 20230108 20230109")
+        print("  python download_gfs_simple.py --date-range 20230108 20251217 --workers 8")
         return
 
-    print(f"Processing {len(dates)} dates (only dates with CWL data)")
+    print(f"Processing {len(dates)} dates")
     print(f"Output: {GFS_OUTPUT_DIR}")
     print(f"Forecast hours: {len(GFS_HOURS)} (3-hourly)")
+    if args.force:
+        print("Force mode: reprocessing existing files")
     print(f"Parallel workers: {MAX_WORKERS}")
 
     success, failed = 0, []
@@ -241,7 +289,7 @@ def main():
 
     for i, date in enumerate(dates):
         print(f"\n[{i+1}/{len(dates)}] ", end="", flush=True)
-        if process_date(date):
+        if process_date(date, force=args.force):
             success += 1
         else:
             failed.append(date)

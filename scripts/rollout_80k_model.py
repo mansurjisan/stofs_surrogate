@@ -29,10 +29,18 @@ import requests
 # Configuration
 # ============================================================
 
-DATA_DIR = Path(os.environ.get('STOFS_DATA_DIR', '/mnt/d/AI_4_STOFS/stofs_surrogate/data/processed_80k_option_a'))
-MODEL_PATH = Path(os.environ.get('STOFS_MODEL_PATH', '/mnt/d/AI_4_STOFS/stofs_surrogate/outputs/checkpoints_80k_optimized/best_model.pt'))
-OUTPUT_DIR = Path('/mnt/d/AI_4_STOFS/stofs_surrogate/outputs/figures_80k')
-TS_DIR = Path('/mnt/d/AI_4_STOFS/stofs_surrogate/outputs/timeseries_80k')
+# Default paths - override with environment variables
+# Local development:
+#   DATA_DIR = /mnt/d/AI_4_STOFS/stofs_surrogate/data/processed_80k_option_a
+#   MODEL_PATH = /mnt/d/AI_4_STOFS/stofs_surrogate/outputs/checkpoints_80k_h100/best_model.pt
+# URSA:
+#   DATA_DIR = /scratch5/purged/Mansur.Jisan/stofs_surrogate/data/processed_80k_option_a
+#   MODEL_PATH = /scratch5/purged/Mansur.Jisan/stofs_surrogate/outputs/checkpoints_80k_h100/best_model.pt
+
+DATA_DIR = Path(os.environ.get('STOFS_DATA_DIR', '/scratch5/purged/Mansur.Jisan/stofs_surrogate/data/processed_80k_option_a'))
+MODEL_PATH = Path(os.environ.get('STOFS_MODEL_PATH', '/scratch5/purged/Mansur.Jisan/stofs_surrogate/outputs/checkpoints_80k_h100/best_model.pt'))
+OUTPUT_DIR = Path(os.environ.get('STOFS_OUTPUT_DIR', '/scratch5/purged/Mansur.Jisan/stofs_surrogate')) / 'outputs' / 'figures_80k'
+TS_DIR = Path(os.environ.get('STOFS_OUTPUT_DIR', '/scratch5/purged/Mansur.Jisan/stofs_surrogate')) / 'outputs' / 'timeseries_80k'
 
 ETA_SCALE = 2.0
 WIND_SCALE = 15.0
@@ -60,10 +68,13 @@ STATIONS = {
 
 
 # ============================================================
-# Model Architecture (must match training)
+# Model Architecture (must match training - BATCHED version)
 # ============================================================
 
-class SWEInspiredGraphBlock(nn.Module):
+class BatchedSWEGraphBlock(nn.Module):
+    """
+    TRUE batched GNN block that processes [B, N, F] tensors in ONE forward pass.
+    """
     def __init__(self, hidden_dim: int):
         super().__init__()
         self.edge_mlp = nn.Sequential(
@@ -81,22 +92,50 @@ class SWEInspiredGraphBlock(nn.Module):
         self.gradient_scale = nn.Parameter(torch.ones(1))
 
     def forward(self, h, edge_index, edge_attr):
+        """
+        Args:
+            h: [B, N, hidden_dim] - batched node features
+            edge_index: [2, E] - shared edge indices
+            edge_attr: [E, hidden_dim] - shared edge features
+        """
+        B, N, F = h.shape
         row, col = edge_index
-        h_src, h_dst = h[row], h[col]
-        h_gradient = h_dst - h_src
-        edge_input = torch.cat([edge_attr, h_src, h_dst, h_gradient], dim=-1)
-        edge_msg = self.edge_mlp(edge_input)
+        E = row.shape[0]
+
+        h_src = h[:, row, :]  # [B, E, F]
+        h_dst = h[:, col, :]  # [B, E, F]
+        h_gradient = h_dst - h_src  # [B, E, F]
+
+        edge_attr_batch = edge_attr.unsqueeze(0).expand(B, -1, -1)  # [B, E, F]
+        edge_input = torch.cat([edge_attr_batch, h_src, h_dst, h_gradient], dim=-1)  # [B, E, 4*F]
+
+        edge_input_flat = edge_input.reshape(B * E, -1)
+        edge_msg_flat = self.edge_mlp(edge_input_flat)
+        edge_msg = edge_msg_flat.reshape(B, E, F)
+
         gradient_gate = torch.tanh(self.gradient_scale * h_gradient)
         edge_msg = edge_msg * (1.0 + gradient_gate)
         edge_msg = edge_msg / (torch.norm(edge_msg, dim=-1, keepdim=True) + 1e-8)
-        aggr = torch.zeros_like(h)
-        aggr.index_add_(0, row, edge_msg)
+
+        aggr = torch.zeros(B, N, F, device=h.device, dtype=h.dtype)
+        row_expanded = row.unsqueeze(0).unsqueeze(-1).expand(B, E, F)
+        aggr.scatter_add_(1, row_expanded, edge_msg)
+
         node_input = torch.cat([h, aggr], dim=-1)
-        h_new = h + self.node_mlp(node_input)
+        node_input_flat = node_input.reshape(B * N, -1)
+        node_out_flat = self.node_mlp(node_input_flat)
+        node_out = node_out_flat.reshape(B, N, F)
+
+        h_new = h + node_out
         return h_new, edge_attr
 
 
-class TemporalMemoryGNN(nn.Module):
+class BatchedTemporalMemoryGNN(nn.Module):
+    """
+    TRUE batched GNN model that processes entire batches in one forward pass.
+    Input shape: [B, N, features] for all inputs
+    Output shape: [B, N, state_dim]
+    """
     def __init__(self, state_dim=1, temporal_dim=6, static_feature_dim=4,
                  forcing_feature_dim=3, edge_feature_dim=3, hidden_dim=128, num_layers=6):
         super().__init__()
@@ -116,7 +155,7 @@ class TemporalMemoryGNN(nn.Module):
             nn.LayerNorm(hidden_dim),
         )
         self.gnn_layers = nn.ModuleList([
-            SWEInspiredGraphBlock(hidden_dim) for _ in range(num_layers)
+            BatchedSWEGraphBlock(hidden_dim) for _ in range(num_layers)
         ])
         self.decoder = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim),
@@ -127,12 +166,36 @@ class TemporalMemoryGNN(nn.Module):
         )
 
     def forward(self, x, x_prev, dxdt, tidal_harmonics, static_features, forcing, edge_index, edge_attr):
+        """
+        TRUE batched forward pass - processes all B samples in ONE pass.
+
+        Args:
+            x: [B, N, 1] current state
+            x_prev: [B, N, 1] previous state
+            dxdt: [B, N, 1] rate of change
+            tidal_harmonics: [B, N, 4] tidal features
+            static_features: [B, N, 4] static node features
+            forcing: [B, N, 3] forcing features
+            edge_index: [2, E] edge connectivity
+            edge_attr: [E, 3] edge features
+        """
+        B = x.shape[0]
         node_features = torch.cat([x, x_prev, dxdt, tidal_harmonics, static_features, forcing], dim=-1)
-        h = self.node_encoder(node_features)
+
+        B, N, F_in = node_features.shape
+        node_flat = node_features.reshape(B * N, F_in)
+        h_flat = self.node_encoder(node_flat)
+        h = h_flat.reshape(B, N, self.hidden_dim)
+
         e = self.edge_encoder(edge_attr)
+
         for layer in self.gnn_layers:
             h, e = layer(h, edge_index, e)
-        delta = self.decoder(h)
+
+        h_flat = h.reshape(B * N, self.hidden_dim)
+        delta_flat = self.decoder(h_flat)
+        delta = delta_flat.reshape(B, N, -1)
+
         return x + delta
 
 
@@ -247,7 +310,7 @@ def load_model_and_data(date_str, device):
     checkpoint = torch.load(MODEL_PATH, map_location=device, weights_only=False)
     config = checkpoint.get('config', {})
 
-    model = TemporalMemoryGNN(
+    model = BatchedTemporalMemoryGNN(
         state_dim=1,
         temporal_dim=6,
         static_feature_dim=4,
@@ -268,7 +331,7 @@ def load_model_and_data(date_str, device):
 
 def run_rollout(model, elevation, forcing, depth, static_base, x_cart, y_cart,
                 edge_index, edge_attr, device, num_steps=48, date_str='20250115'):
-    """Run autoregressive rollout."""
+    """Run autoregressive rollout with BATCHED model (B=1)."""
     predictions = []
     ground_truth = []
 
@@ -280,43 +343,45 @@ def run_rollout(model, elevation, forcing, depth, static_base, x_cart, y_cart,
     cwl_prev = np.nan_to_num(elevation[0].astype(np.float32), nan=0.0)
     cwl_t = np.nan_to_num(elevation[1].astype(np.float32), nan=0.0)
 
-    current_prev = torch.tensor(cwl_prev / ETA_SCALE, dtype=torch.float32).unsqueeze(1).to(device)
-    current_cwl = torch.tensor(cwl_t / ETA_SCALE, dtype=torch.float32).unsqueeze(1).to(device)
+    # Add batch dimension [1, N, 1] for batched model
+    current_prev = torch.tensor(cwl_prev / ETA_SCALE, dtype=torch.float32).unsqueeze(0).unsqueeze(-1).to(device)
+    current_cwl = torch.tensor(cwl_t / ETA_SCALE, dtype=torch.float32).unsqueeze(0).unsqueeze(-1).to(device)
 
     print(f"Running {num_steps}h rollout...")
 
     with torch.no_grad():
         for t in range(1, min(num_steps + 1, len(elevation) - 1)):
-            # Temporal features
+            # Temporal features [1, N, 1]
             dxdt = (current_cwl - current_prev) / DT_HOURS
 
-            # Tidal harmonics
+            # Tidal harmonics [1, N, 4]
             global_hour_t = global_hours_offset + t * DT_HOURS
             tidal_harmonics = compute_tidal_harmonics(global_hour_t, num_nodes)
-            tidal_tensor = torch.tensor(tidal_harmonics, dtype=torch.float32).to(device)
+            tidal_tensor = torch.tensor(tidal_harmonics, dtype=torch.float32).unsqueeze(0).to(device)
 
-            # Static features with water level
+            # Static features with water level [1, N, 4]
             cwl_np = current_cwl.squeeze().cpu().numpy() * ETA_SCALE
             water_level = depth + cwl_np
             wl_norm = (water_level - water_level.mean()) / (water_level.std() + 1e-8)
             static = np.concatenate([static_base, wl_norm[:, np.newaxis]], axis=1)
-            static_tensor = torch.tensor(static, dtype=torch.float32).to(device)
+            static_tensor = torch.tensor(static, dtype=torch.float32).unsqueeze(0).to(device)
 
-            # Forcing
+            # Forcing [1, N, 3]
             u10 = forcing['u10'][t].astype(np.float32) / WIND_SCALE
             v10 = forcing['v10'][t].astype(np.float32) / WIND_SCALE
             pres = forcing['pressure'][t].astype(np.float32)
             forcing_arr = np.stack([u10, v10, pres], axis=1)
-            forcing_tensor = torch.tensor(forcing_arr, dtype=torch.float32).to(device)
+            forcing_tensor = torch.tensor(forcing_arr, dtype=torch.float32).unsqueeze(0).to(device)
 
             with autocast('cuda'):
                 pred = model(current_cwl, current_prev, dxdt, tidal_tensor,
                            static_tensor, forcing_tensor, edge_index, edge_attr)
 
+            # Remove batch dimension for storage
             predictions.append(pred.squeeze().cpu().numpy() * ETA_SCALE)
             ground_truth.append(np.nan_to_num(elevation[t + 1].astype(np.float32), nan=0.0))
 
-            # Update state
+            # Update state (keep batch dimension)
             current_prev = current_cwl
             current_cwl = pred
 
