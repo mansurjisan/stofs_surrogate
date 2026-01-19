@@ -7,7 +7,99 @@ Building a Graph Neural Network surrogate for NOAA's STOFS (Surge and Tide Opera
 
 ## Completed Experiments
 
-### 1. 25K V2 Model Training (Baseline)
+### Phase 1: Initial Development (November - Early December 2025)
+
+#### 1a. Synthetic & Basic STOFS Training
+**Dates:** November 2025
+**Scripts:** `train_synthetic.py`, `train_stofs.py`, `train_us_east_coast.py`
+
+**Purpose:** Initial proof-of-concept GNN training on STOFS data
+- Started with synthetic data to validate architecture
+- Moved to real STOFS data on US East Coast
+- Established baseline training pipeline
+
+---
+
+#### 1b. Mid-Atlantic Regional Model
+**Dates:** December 4-5, 2025
+**Scripts:** `train_midatlantic.py`, `train_midatlantic_with_forcing.py`
+
+**Configuration:**
+- Domain: [-76, -73] × [38, 41] (NY, NJ, Delaware Bay, Philadelphia)
+- Added meteorological forcing (wind u10/v10, pressure)
+- Interpolation of met forcing from regular grid to ADCIRC mesh
+
+**Key Learning:** Meteorological forcing significantly improves storm surge prediction
+
+---
+
+#### 1c. CWL GNN Development (Physics-Informed)
+**Dates:** December 5-6, 2025
+**Scripts:** `train_cwl_gnn_enhanced.py`, `train_cwl_gnn_multidate.py`, `train_cwl_gnn_optimized*.py`
+
+**Enhancements implemented:**
+1. Gradient term in message passing (critical for physics)
+2. Curriculum learning (faster convergence)
+3. Water level in static features
+4. Physics-informed loss with mass conservation
+5. Multi-date training support
+
+**Hardware:** RTX 3050 (4GB VRAM) - required aggressive memory optimization
+
+**Key Finding:** 15,000 nodes optimal for 4GB VRAM (5-7x faster than 50k)
+
+---
+
+#### 1d. 25K 15-Day Model (A10G)
+**Dates:** December 7, 2025
+**Script:** `train_25k_15day.py`
+**Hardware:** NVIDIA A10G (24GB VRAM)
+
+**Configuration:**
+- Nodes: 25,000 (higher resolution)
+- Training data: 15 days (Nov 15-29, 2025)
+- ~1,650 training samples
+- Expected training time: 3-4 hours
+
+**Purpose:** Scale up to higher resolution with cloud GPU
+
+---
+
+#### 1e. Temporal Memory Model (Phase Lag Fix)
+**Dates:** December 10, 2025
+**Scripts:** `train_25k_temporal_memory.py`, `train_25k_temporal_memory_v3.py`
+
+**Problem:** Model showed phase lag in tidal predictions - couldn't distinguish rising vs falling tide
+
+**Solution:** Added temporal context to model inputs:
+- η(t-1): Previous water level
+- dη/dt: Rate of change
+
+**Configuration:**
+- TEMPORAL_FEATURES = 2 (was 0)
+- Increased multi-step training horizon (4-6 steps)
+
+**Result:** Phase lag issue resolved
+
+---
+
+#### 1f. 80K Full Domain Experiments
+**Dates:** December 27-30, 2025
+**Scripts:** `train_80k_option_a.py`, `train_80k_batched.py`, `train_80k_optimized.py`, `train_80k_inmemory.py`
+
+**Configuration:**
+- Nodes: 80,000 (full STOFS domain)
+- Multiple optimization iterations for memory efficiency
+
+**Challenges:**
+- Memory constraints with large graph
+- Required batched processing and in-memory optimizations
+
+---
+
+### Phase 2: Production Training (January 2026)
+
+### 2. 25K V2 Model Training (Current Best)
 **Status:** Completed
 **Dates:** December 2025 - January 2026
 **Location:** URSA H100 Cluster
@@ -151,11 +243,18 @@ Building a Graph Neural Network surrogate for NOAA's STOFS (Surge and Tide Opera
 
 ## Key Findings
 
-### Training Insights
+### Architecture Insights (Phase 1)
+1. **Temporal memory is critical**: Adding η(t-1) and dη/dt resolved phase lag issues
+2. **Gradient term in message passing**: Essential for physics-informed learning
+3. **Curriculum learning**: Start with 1-step, gradually increase rollout horizon
+4. **15k nodes**: Sweet spot for 4GB VRAM; 25k needs 24GB+
+
+### Training Insights (Phase 2)
 1. **6-step rollout** significantly improves long-term forecasts vs 1-3 step
 2. **Epoch 60 > Epoch 55**: 10-14% improvement across all lead times
 3. **2025 validation** shows true generalization (2023 was training data)
 4. **Memory constraints**: 447k edges requires batch=1 on H100
+5. **Met forcing matters**: Wind and pressure significantly improve storm surge prediction
 
 ### Model Performance
 - Best performance in protected bays (Baltimore R=0.99)
