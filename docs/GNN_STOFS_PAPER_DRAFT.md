@@ -41,9 +41,126 @@ Ongoing work focuses on extending the surrogate to hurricane storm surge predict
 
 ---
 
-## 2. Study Domain
+## 2. Related Work and Comparison
 
-### 2.1 Geographic Extent
+### 2.1 Overview of Existing Approaches
+
+Recent advances in deep learning have produced several approaches for storm surge and flood prediction. These methods can be broadly categorized by their spatial representation strategy and physics integration approach.
+
+**Regular Grid Methods:** Convolutional neural network (CNN) approaches such as DeepSurge (Gao et al., 2024) operate on regular grids, combining spatial convolutions with recurrent neural networks to capture temporal dynamics. While effective for large-scale coastal surge prediction across the U.S. Gulf and Atlantic coastlines, these methods require interpolation from native unstructured model output, potentially introducing artifacts in regions of complex coastal geometry.
+
+**Station Network Methods:** Graph neural networks applied to observation station networks (Kazadi et al., 2024) leverage the natural graph structure of tide gauge locations. By combining GNN spatial encoders with GRU temporal modules, these approaches capture spatial dependencies across sparse observation points. However, they predict only at station locations rather than full spatial fields.
+
+**Unstructured Mesh Methods:** Physics-informed GNN approaches operating on unstructured meshes (Song & Shen, 2023; Wu et al., 2025) preserve the native discretization of numerical models. The NN-p2p model demonstrated surrogate modeling for shallow water equation solvers on unstructured meshes, while multi-scale hydraulic GNNs (mSWE-GNN) introduced hierarchical processing for improved efficiency.
+
+**Physics-Informed Approaches:** HydroGraphNet (Taghizadeh et al., 2025) incorporates mass conservation constraints through loss function regularization, achieving significant error reduction in river flood forecasting. However, most physics-informed approaches apply constraints globally rather than embedding physical principles directly into the message-passing operations.
+
+### 2.2 Comparison with Existing Methods
+
+| Feature | **This Work** | NN-p2p | Kazadi GNN | HydroGraphNet | DeepSurge | mSWE-GNN |
+|---------|---------------|--------|------------|---------------|-----------|----------|
+| **Domain** | Coastal/estuarine | River hydraulics | Storm surge | River flooding | US coastal | Inland flooding |
+| **Grid Type** | Unstructured mesh | Unstructured mesh | Station network | Unstructured mesh | Regular grid | Unstructured mesh |
+| **Scale (nodes)** | 25K-80K | ~1K-10K | ~50 stations | ~5K | Regular grid | ~10K |
+| **Architecture** | Message-passing GNN | CNN-based | GNN + GRU | Encoder-Processor-Decoder | CNN + RNN | Multi-scale GNN |
+| **Tidal dynamics** | ✓ 6 constituents | ✗ | ✗ | ✗ | ✗ | ✗ |
+| **Temporal memory** | ✓ η(t-1), dη/dt | ✗ | ✓ GRU | ✗ | ✓ RNN | ✗ |
+| **Physics-informed** | ✓ Gradient scaling | Partial | ✗ | ✓ Mass conservation | ✓ | ✓ SWE-based |
+| **Long-range edges** | ✓ 262K added | ✗ | ✗ | ✗ | N/A (grid) | ✗ |
+| **Operational target** | ✓ STOFS-2D Global | Research | Research | Research | Research | Research |
+
+### 2.3 Key Differentiators
+
+#### 2.3.1 Native Unstructured Mesh Operation at Scale
+
+Most coastal surge prediction models operate on regular grids, requiring interpolation from native ADCIRC/STOFS unstructured output. Our approach operates directly on the 25,000-80,000 node unstructured mesh, preserving:
+- Variable resolution from ~200 m in estuaries to ~15 km offshore
+- Complex coastal geometry without interpolation artifacts
+- Native ADCIRC/STOFS mesh topology and element connectivity
+
+This represents a significant scale increase over existing unstructured mesh GNN approaches, which typically operate on meshes with fewer than 10,000 nodes.
+
+#### 2.3.2 Physics-Informed Gradient Scaling in Message Passing
+
+Unlike approaches that apply physics constraints only through loss function regularization, we embed physical principles directly into the message-passing operation:
+
+```
+m_ij = m_ij × (1 + tanh(γ × (h_dst - h_src)))
+```
+
+This formulation mimics the pressure gradient term (∂η/∂x) in the shallow water momentum equations, where γ is a learnable parameter. The gradient-dependent scaling enables the network to learn flux-like quantities analogous to finite volume discretizations, improving physical consistency without explicit supervision.
+
+#### 2.3.3 Explicit Tidal Harmonic Encoding
+
+No existing storm surge GNN incorporates explicit tidal constituent encoding. We include six principal constituents (M2, S2, N2, K1, O1, M4) as sine/cosine pairs computed from a global time reference:
+
+| Constituent | Period (hours) | Type |
+|-------------|----------------|------|
+| M2 | 12.42 | Principal lunar semidiurnal |
+| S2 | 12.00 | Principal solar semidiurnal |
+| N2 | 12.66 | Larger lunar elliptic |
+| K1 | 23.93 | Lunar diurnal |
+| O1 | 25.82 | Lunar diurnal |
+| M4 | 6.21 | Shallow water overtide |
+
+This explicit encoding provides phase information critical for:
+- Semi-enclosed bays with complex tidal amplification (Chesapeake, Delaware)
+- Spring versus neap tide discrimination
+- Tidal-surge interaction during storm events
+
+#### 2.3.4 Temporal Memory for Phase Resolution
+
+Including the previous state η(t-1) and temporal tendency dη/dt as input features resolves the phase ambiguity inherent in single-snapshot predictions. This mechanism enables the model to distinguish:
+- Rising versus falling tide (same η, opposite dη/dt)
+- Flood versus ebb current regimes
+- Accelerating versus decelerating water level changes
+
+This capability is essential for accurate predictions in estuarine systems where tidal phase relationships govern the timing of peak water levels.
+
+#### 2.3.5 Long-Range Edge Augmentation
+
+Standard GNN message-passing on locally-connected meshes limits information propagation to approximately 12-30 km per forward pass (6 layers × 2-5 km median edge length). This is insufficient for tidal signals that propagate O(100 km) per hour.
+
+We introduce strategic long-range edges connecting:
+- **Bay mouth → inner bay:** Accelerates tidal signal propagation into estuaries
+- **Along-coast connections:** Enables storm surge propagation parallel to coastline
+- **Sparse global k-NN:** General long-range information exchange
+
+| Metric | Original Mesh | Enhanced Mesh | Change |
+|--------|---------------|---------------|--------|
+| Total Edges | 185,092 | 447,541 | +141.8% |
+| Long-Range Edges | 0 | 262,449 | — |
+| Max Edge Distance | ~15 km | ~203 km | +13.5× |
+
+This augmentation directly addresses a fundamental limitation of local message-passing without sacrificing resolution in complex geometry regions.
+
+#### 2.3.6 Operational Forecast System Target
+
+Most existing ML surge models target:
+- Hindcast reconstruction (DeepSurge)
+- Single historical events (FloodGNN-GRU on Hurricane Harvey)
+- Research domains (HydroGraphNet on White River, Indiana)
+
+Our model specifically targets NOAA's operational STOFS-2D Global system, with:
+- Real-time GFS atmospheric forcing integration
+- 48-hour forecast capability
+- Validation on temporally held-out data (training: 2023, validation: 2025)
+- Computational efficiency suitable for ensemble generation
+
+### 2.4 Summary of Novel Contributions
+
+1. **First GNN surrogate for operational STOFS-2D Global** at full unstructured mesh resolution (25K-80K nodes)
+2. **Physics-informed message passing** with learnable gradient scaling embedded in edge updates
+3. **Explicit tidal harmonic encoding** (6 constituents) in a GNN framework for coastal applications
+4. **Long-range edge augmentation** strategy for accelerated information propagation in estuarine systems
+5. **Temporal memory mechanism** (η(t-1), dη/dt) for phase-aware tidal prediction
+6. **Scale demonstration** at 185K-447K edges, significantly larger than typical flood modeling GNNs
+
+---
+
+## 3. Study Domain
+
+### 3.1 Geographic Extent
 
 | Parameter | Value |
 |-----------|-------|
@@ -52,7 +169,7 @@ Ongoing work focuses on extending the surrogate to hurricane storm surge predict
 | Primary Estuaries | Chesapeake Bay, Delaware Bay, NY Harbor |
 | Coastline | Mid-Atlantic Bight (VA to NY) |
 
-### 2.2 Mesh Configuration
+### 3.2 Mesh Configuration
 
 | Configuration | 25K Model | 80K Model |
 |---------------|-----------|-----------|
@@ -65,9 +182,9 @@ Ongoing work focuses on extending the surrogate to hurricane storm surge predict
 
 ---
 
-## 3. Model Architecture
+## 4. Model Architecture
 
-### 3.1 High-Level Architecture Diagram
+### 4.1 High-Level Architecture Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -140,7 +257,7 @@ Ongoing work focuses on extending the surrogate to hurricane storm surge predict
                          └──────────────────┘
 ```
 
-### 3.2 SWE Graph Block (Message Passing Layer)
+### 4.2 SWE Graph Block (Message Passing Layer)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -226,7 +343,7 @@ Ongoing work focuses on extending the surrogate to hurricane storm surge predict
                     └───────────────────────┘
 ```
 
-### 3.3 Edge Feature Encoding
+### 4.3 Edge Feature Encoding
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -259,7 +376,7 @@ Ongoing work focuses on extending the surrogate to hurricane storm surge predict
        └────────────────────────────────────────────┘
 ```
 
-### 3.4 Autoregressive Rollout
+### 4.4 Autoregressive Rollout
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -312,9 +429,9 @@ Ongoing work focuses on extending the surrogate to hurricane storm surge predict
 
 ---
 
-## 4. Hyperparameter Configuration
+## 5. Hyperparameter Configuration
 
-### 4.1 Model Architecture Parameters
+### 5.1 Model Architecture Parameters
 
 | Parameter | Symbol | Value | Description |
 |-----------|--------|-------|-------------|
@@ -328,7 +445,7 @@ Ongoing work focuses on extending the surrogate to hurricane storm surge predict
 | Total Input Dimension | d_in | 27 | d_s×3 + d_t + d_static + d_f |
 | Total Parameters | - | 1,643,015 | Trainable weights |
 
-### 4.2 Training Hyperparameters
+### 5.2 Training Hyperparameters
 
 | Parameter | Value | Notes |
 |-----------|-------|-------|
@@ -340,7 +457,7 @@ Ongoing work focuses on extending the surrogate to hurricane storm surge predict
 | Mixed Precision | FP16 (AMP) | Memory optimization |
 | Gradient Accumulation | 16 steps | Effective batch size scaling |
 
-### 4.3 Curriculum Learning Schedule
+### 5.3 Curriculum Learning Schedule
 
 | Phase | Epochs | Rollout Steps | Batch Size | Effective Batch |
 |-------|--------|---------------|------------|-----------------|
@@ -350,7 +467,7 @@ Ongoing work focuses on extending the surrogate to hurricane storm surge predict
 | 4 | 51-75 | 6 | 2 | 32 |
 | 5 | 76-100 | 12 | 1 | 16 |
 
-### 4.4 Data Configuration
+### 5.4 Data Configuration
 
 | Parameter | Value |
 |-----------|-------|
@@ -362,7 +479,7 @@ Ongoing work focuses on extending the surrogate to hurricane storm surge predict
 | Validation Samples | 4,950 |
 | Elevation Scaling | η_scaled = η / 2.0 m |
 
-### 4.5 Tidal Constituent Periods
+### 5.5 Tidal Constituent Periods
 
 | Constituent | Period (hours) | Type |
 |-------------|----------------|------|
@@ -375,13 +492,13 @@ Ongoing work focuses on extending the surrogate to hurricane storm surge predict
 
 ---
 
-## 5. Long-Range Edge Enhancement
+## 6. Long-Range Edge Enhancement
 
-### 5.1 Motivation
+### 6.1 Motivation
 
 Standard mesh connectivity limits information propagation to ~12-30 km per forward pass (6 layers × 2-5 km median edge length). This is insufficient for capturing rapid tidal/surge propagation over O(100 km) scales within single hourly timesteps.
 
-### 5.2 Long-Range Edge Types
+### 6.2 Long-Range Edge Types
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -423,7 +540,7 @@ Standard mesh connectivity limits information propagation to ~12-30 km per forwa
        └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 5.3 Edge Statistics
+### 6.3 Edge Statistics
 
 | Metric | Original Mesh | Enhanced Mesh | Change |
 |--------|---------------|---------------|--------|
@@ -433,7 +550,7 @@ Standard mesh connectivity limits information propagation to ~12-30 km per forwa
 | Max Edge Distance | ~15 km | ~203 km | +13.5× |
 | Median Edge Distance | 2.5 km | 72.6 km | +29× |
 
-### 5.4 Distance Distribution of Long-Range Edges
+### 6.4 Distance Distribution of Long-Range Edges
 
 | Distance Range | Count | Percentage |
 |----------------|-------|------------|
@@ -443,9 +560,9 @@ Standard mesh connectivity limits information propagation to ~12-30 km per forwa
 
 ---
 
-## 6. Training Infrastructure
+## 7. Training Infrastructure
 
-### 6.1 Hardware Configuration
+### 7.1 Hardware Configuration
 
 | Component | Specification |
 |-----------|---------------|
@@ -455,7 +572,7 @@ Standard mesh connectivity limits information propagation to ~12-30 km per forwa
 | Storage | NVMe SSD (scratch) |
 | Cluster | NOAA URSA HPC |
 
-### 6.2 Software Stack
+### 7.2 Software Stack
 
 | Package | Version | Purpose |
 |---------|---------|---------|
@@ -465,7 +582,7 @@ Standard mesh connectivity limits information propagation to ~12-30 km per forwa
 | NumPy | 1.24+ | Numerical operations |
 | SciPy | 1.11+ | Scientific computing |
 
-### 6.3 Training Performance
+### 7.3 Training Performance
 
 | Metric | Original (185k edges) | Long-Range (447k edges) |
 |--------|----------------------|-------------------------|
@@ -476,9 +593,9 @@ Standard mesh connectivity limits information propagation to ~12-30 km per forwa
 
 ---
 
-## 7. Preliminary Results
+## 8. Preliminary Results
 
-### 7.1 Validation Performance (Epoch 60, 2025 Data)
+### 8.1 Validation Performance (Epoch 60, 2025 Data)
 
 | Lead Time | RMSE (cm) | Correlation |
 |-----------|-----------|-------------|
@@ -489,7 +606,7 @@ Standard mesh connectivity limits information propagation to ~12-30 km per forwa
 | t+36h | 47.2 | 0.85 |
 | t+48h | 58.2 | 0.82 |
 
-### 7.2 Station-Level Performance
+### 8.2 Station-Level Performance
 
 | Station | Location | RMSE (cm) | Correlation |
 |---------|----------|-----------|-------------|
@@ -501,7 +618,7 @@ Standard mesh connectivity limits information propagation to ~12-30 km per forwa
 | Cape May | Delaware Bay mouth | 22.1 | 0.89 |
 | Ocean City, MD | Open coast | 25.4 | 0.86 |
 
-### 7.3 Computational Speedup
+### 8.3 Computational Speedup
 
 | Metric | STOFS (Numerical) | GNN Surrogate | Speedup |
 |--------|-------------------|---------------|---------|
@@ -511,23 +628,23 @@ Standard mesh connectivity limits information propagation to ~12-30 km per forwa
 
 ---
 
-## 8. Discussion
+## 9. Discussion
 
-### 8.1 Key Innovations
+### 9.1 Key Innovations
 
 1. **Temporal Memory**: Inclusion of η(t-1) and dη/dt resolves tidal phase ambiguity
 2. **Physics-Informed Message Passing**: Gradient-scaled edge updates mimic shallow water flux computations
 3. **Long-Range Connectivity**: Strategic edge augmentation enables rapid information propagation
 4. **Curriculum Learning**: Progressive rollout horizon prevents gradient degradation
 
-### 8.2 Limitations
+### 9.2 Limitations
 
 1. Trained on STOFS hindcast data—inherits biases of parent model
 2. Limited to Mid-Atlantic region; requires retraining for other domains
 3. Does not include wave-current interactions or baroclinic effects
 4. Extreme events (major hurricanes) underrepresented in training data
 
-### 8.3 Future Work
+### 9.3 Future Work
 
 1. Extension to hurricane storm surge prediction
 2. Data assimilation for real-time bias correction
@@ -536,9 +653,9 @@ Standard mesh connectivity limits information propagation to ~12-30 km per forwa
 
 ---
 
-## 9. Reproducibility
+## 10. Reproducibility
 
-### 9.1 Code Repository
+### 10.1 Code Repository
 
 ```
 stofs_surrogate/
@@ -555,7 +672,7 @@ stofs_surrogate/
     └── GNN_STOFS_PAPER_DRAFT.md      # This document
 ```
 
-### 9.2 Data Availability
+### 10.2 Data Availability
 
 - STOFS-2D Global output: NOAA CO-OPS (publicly available)
 - GFS atmospheric forcing: NOAA NOMADS (publicly available)
