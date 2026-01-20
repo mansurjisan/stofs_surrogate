@@ -37,7 +37,7 @@ A key limitation of GNN surrogates operating on locally-connected meshes is the 
 
 Validation against held-out STOFS hindcast data demonstrates that the trained surrogate achieves root-mean-square errors of approximately 21 cm at 6-hour lead times and 51 cm at 24-hour lead times for the 2025 validation period, with correlation coefficients exceeding 0.95 at protected tide gauge locations within the Chesapeake Bay. The model executes 48-hour forecasts in approximately 3 seconds on a single GPU, representing a speedup of approximately 10⁴ relative to the parent numerical model. This computational efficiency enables real-time ensemble generation for uncertainty quantification, rapid scenario analysis for emergency management applications, and potential integration into coupled atmosphere-ocean prediction systems where feedback between storm surge and atmospheric boundary layer dynamics may be important.
 
-Ongoing work focuses on extending the surrogate to hurricane storm surge prediction, where the extreme wind forcing and rapid intensification dynamics present additional challenges for learned models. The incorporation of data assimilation techniques to correct model drift during extended forecasts, and the development of hybrid approaches that couple GNN surrogates with reduced-physics models for improved extrapolation beyond the training distribution, represent promising directions for operational deployment of machine learning-based coastal flood forecasting systems.
+Ongoing work focuses on validating the surrogate under extreme hurricane conditions, where the intense wind forcing and rapid storm intensification dynamics present additional challenges for learned models trained primarily on non-extreme events. The incorporation of data assimilation techniques to correct model drift during extended forecasts, and the development of hybrid approaches that couple GNN surrogates with reduced-physics models for improved extrapolation beyond the training distribution, represent promising directions for operational deployment of machine learning-based coastal flood forecasting systems.
 
 ---
 
@@ -748,10 +748,11 @@ Standard mesh connectivity limits information propagation to ~12-30 km per forwa
 
 ### 9.3 Future Work
 
-1. Extension to hurricane storm surge prediction
-2. Data assimilation for real-time bias correction
-3. Uncertainty quantification via ensemble methods
-4. Hybrid coupling with reduced-physics models
+1. Validation on major hurricane events (e.g., historical storms like Sandy, Irene) to assess performance under extreme forcing
+2. Training data augmentation with synthetic hurricane scenarios to improve robustness
+3. Data assimilation for real-time bias correction during operational forecasts
+4. Uncertainty quantification via ensemble methods
+5. Hybrid coupling with reduced-physics models for improved extrapolation
 
 ---
 
