@@ -343,7 +343,109 @@ Our model specifically targets NOAA's operational STOFS-2D Global system, with:
                     └───────────────────────┘
 ```
 
-### 4.3 Edge Feature Encoding
+### 4.3 Connection to Shallow Water Equations
+
+The design of the SWE Graph Block is motivated by the 2D depth-averaged shallow water equations, which govern barotropic coastal dynamics:
+
+**Continuity equation:**
+```
+∂η/∂t + ∂(Hu)/∂x + ∂(Hv)/∂y = 0
+```
+
+**Momentum equations:**
+```
+∂u/∂t = -g ∂η/∂x + (τ_sx - τ_bx)/(ρH) - fu + ...
+∂v/∂t = -g ∂η/∂y + (τ_sy - τ_by)/(ρH) + fv + ...
+```
+
+where η is water surface elevation, (u,v) are depth-averaged velocities, H is total water depth, g is gravitational acceleration, τ_s is wind stress, τ_b is bottom friction, f is the Coriolis parameter, and ρ is water density.
+
+#### 4.3.1 Physics-Informed Gradient Term
+
+The key physics insight is that **flow is driven by the pressure gradient** (∂η/∂x, ∂η/∂y). In our message-passing framework, we approximate this by computing the gradient of hidden features between connected nodes:
+
+```python
+h_gradient = h_dst - h_src   # Approximates ∂h/∂x between adjacent nodes
+```
+
+This term is included in the edge message computation alongside source and destination node features:
+
+```python
+edge_input = concat([edge_attr, h_src, h_dst, h_gradient])
+edge_msg = EdgeMLP(edge_input)
+```
+
+#### 4.3.2 Gradient-Modulated Message Passing
+
+Standard GNN message passing computes edge messages without explicit physics:
+```
+m_ij = MLP([h_i, h_j, e_ij])
+```
+
+Our SWE-inspired formulation modulates messages based on the local gradient:
+```
+m_ij = MLP([h_i, h_j, e_ij, h_j - h_i]) × (1 + tanh(γ × (h_j - h_i)))
+```
+
+where γ is a **learnable parameter** (`gradient_scale`) initialized to 1.0. This formulation has several physics-motivated properties:
+
+| Property | Formulation | Physical Interpretation |
+|----------|-------------|------------------------|
+| Gradient sensitivity | `h_gradient = h_dst - h_src` | Approximates ∂η/∂x between nodes |
+| Learnable scaling | `γ = nn.Parameter(torch.ones(1))` | Network learns appropriate gradient sensitivity |
+| Nonlinear gating | `tanh(γ × h_gradient)` | Bounded modulation ∈ [-1, 1] |
+| Flux amplification | `m × (1 + gate)` | Larger gradients → stronger messages |
+
+#### 4.3.3 Implementation (PyTorch)
+
+The core physics-informed message passing is implemented as:
+
+```python
+class BatchedSWEGraphBlock(nn.Module):
+    def __init__(self, hidden_dim: int):
+        super().__init__()
+        self.edge_mlp = nn.Sequential(
+            nn.Linear(hidden_dim * 4, hidden_dim * 2),  # 4× for [e, h_src, h_dst, h_grad]
+            nn.ReLU(),
+            nn.Linear(hidden_dim * 2, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+        )
+        self.gradient_scale = nn.Parameter(torch.ones(1))  # Learnable γ
+
+    def forward(self, h, edge_index, edge_attr):
+        row, col = edge_index
+        h_src = h[:, row, :]
+        h_dst = h[:, col, :]
+
+        # Physics-informed gradient computation
+        h_gradient = h_dst - h_src  # ← Approximates pressure gradient
+
+        # Edge message with gradient information
+        edge_input = torch.cat([edge_attr, h_src, h_dst, h_gradient], dim=-1)
+        edge_msg = self.edge_mlp(edge_input)
+
+        # Gradient-modulated scaling (SWE-inspired)
+        gradient_gate = torch.tanh(self.gradient_scale * h_gradient)
+        edge_msg = edge_msg * (1.0 + gradient_gate)  # ← Key physics line
+
+        # Normalize for stability
+        edge_msg = edge_msg / (torch.norm(edge_msg, dim=-1, keepdim=True) + 1e-8)
+
+        # ... aggregation and node update ...
+```
+
+#### 4.3.4 Comparison: Standard vs Physics-Informed Message Passing
+
+| Aspect | Standard GNN | SWE-Inspired GNN |
+|--------|--------------|------------------|
+| Edge input | `[h_src, h_dst, e_ij]` | `[h_src, h_dst, e_ij, h_gradient]` |
+| Message scaling | None | `× (1 + tanh(γ × h_gradient))` |
+| Physics prior | None | Gradient drives flux |
+| Learnable physics | No | Yes (γ parameter) |
+
+This design allows the network to learn flux-like quantities that respect the fundamental physics of shallow water dynamics, where flow is driven by water surface gradients.
+
+### 4.4 Edge Feature Encoding
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -376,7 +478,7 @@ Our model specifically targets NOAA's operational STOFS-2D Global system, with:
        └────────────────────────────────────────────┘
 ```
 
-### 4.4 Autoregressive Rollout
+### 4.5 Autoregressive Rollout
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
