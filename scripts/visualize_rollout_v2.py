@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ============================================================
 
-DATA_DIR = Path('/mnt/f/STOFS_TRAINING_DATA/processed_25k_v2')
+DATA_DIR = Path('/mnt/e/STOFS_TRAINING_DATA/processed_25k_v2')
 CHECKPOINT_DIR = Path('/mnt/d/AI_4_STOFS/stofs_surrogate/outputs/checkpoints_25k_v2')
 OUTPUT_DIR = Path('/mnt/d/AI_4_STOFS/stofs_surrogate/outputs/figures_25k_v2')
 
@@ -54,13 +54,14 @@ TIDAL_PERIODS = {
 }
 
 # Checkpoints to compare (based on rollout schedule)
-# 1-step: epochs 1-15, 2-step: 16-30, 3-step: 31-50, 6-step: 51-75
+# 1-step: epochs 1-15, 2-step: 16-30, 3-step: 31-50, 6-step: 51-75, 12-step: 76-100
 CHECKPOINTS_TO_COMPARE = [
-    ('epoch_15', 'checkpoint_epoch_15.pt', '1-step (ep15)'),
+    ('best_model', 'best_model.pt', 'Best (ep13)'),
     ('epoch_30', 'checkpoint_epoch_30.pt', '2-step (ep30)'),
     ('epoch_50', 'checkpoint_epoch_50.pt', '3-step (ep50)'),
-    ('epoch_55', 'checkpoint_epoch_55.pt', '6-step (ep55)'),
     ('epoch_60', 'checkpoint_epoch_60.pt', '6-step (ep60)'),
+    ('epoch_80', 'checkpoint_epoch_80.pt', '12-step (ep80)'),
+    ('epoch_95', 'checkpoint_epoch_95.pt', '12-step (ep95)'),
 ]
 
 # Rollout settings
@@ -333,6 +334,12 @@ def compute_rmse_by_lead_time(predictions, ground_truth):
 # ============================================================
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description='Rollout Visualization for STOFS-GNN V2')
+    parser.add_argument('--date', type=str, default=None, help='Validation date (YYYYMMDD)')
+    parser.add_argument('--snapshots', action='store_true', help='Generate individual spatial snapshots')
+    args = parser.parse_args()
+
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -344,14 +351,16 @@ def main():
     logger.info(f"Mesh: {len(mesh_data['lon']):,} nodes")
 
     # Find a validation date
-    val_files = sorted([f for f in DATA_DIR.glob('processed_2025*.npz') if 'mesh' not in f.stem])
-    if not val_files:
-        logger.error("No validation files found!")
-        return
-
-    # Use first available validation date
-    val_file = val_files[0]
-    date_str = val_file.stem.replace('processed_', '')
+    if args.date:
+        val_file = DATA_DIR / f'processed_{args.date}.npz'
+        date_str = args.date
+    else:
+        val_files = sorted([f for f in DATA_DIR.glob('processed_2025*.npz') if 'mesh' not in f.stem])
+        if not val_files:
+            logger.error("No validation files found!")
+            return
+        val_file = val_files[0]
+        date_str = val_file.stem.replace('processed_', '')
     logger.info(f"Using validation date: {date_str}")
 
     # Load validation data
@@ -492,6 +501,68 @@ def main():
         plt.savefig(OUTPUT_DIR / f'rollout_spatial_error_{date_str}.png', dpi=150)
         plt.close()
         logger.info(f"Saved: {OUTPUT_DIR / f'rollout_spatial_error_{date_str}.png'}")
+
+    # ========================================
+    # Plot 4: Individual Spatial Snapshots (6-hourly)
+    # ========================================
+    if args.snapshots and results:
+        snapshot_dir = OUTPUT_DIR / 'spatial_snapshots'
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+        latest_name = list(results.keys())[-1]
+        latest_data = results[latest_name]
+
+        # Get color scale
+        all_preds = np.concatenate(latest_data['predictions'])
+        all_truth = np.concatenate(latest_data['ground_truth'])
+        vmax = np.percentile(np.abs(np.concatenate([all_preds, all_truth])), 98)
+        vmin = -vmax
+
+        logger.info(f"\nGenerating individual spatial snapshots...")
+        logger.info(f"  Color scale: [{vmin:.2f}, {vmax:.2f}] m")
+
+        for h in range(0, MAX_ROLLOUT_HOURS + 1, 6):
+            if h == 0 or h > len(latest_data['predictions']):
+                continue
+
+            pred = latest_data['predictions'][h - 1]
+            truth = latest_data['ground_truth'][h - 1]
+            rmse_h = np.sqrt(np.mean((pred - truth)**2))
+            corr_h = np.corrcoef(pred, truth)[0, 1]
+
+            fig, axes = plt.subplots(1, 2, figsize=(16, 7))
+
+            # STOFS ground truth
+            sc1 = axes[0].scatter(mesh_data['lon'], mesh_data['lat'],
+                                  c=truth, s=3, cmap='RdBu_r',
+                                  vmin=vmin, vmax=vmax, marker='.')
+            axes[0].set_title(f'STOFS Ground Truth - t+{h}h', fontsize=14, fontweight='bold')
+            axes[0].set_xlabel('Longitude')
+            axes[0].set_ylabel('Latitude')
+            axes[0].set_aspect('equal')
+            plt.colorbar(sc1, ax=axes[0], label='Water Level (m MSL)', shrink=0.8)
+
+            # GNN prediction
+            sc2 = axes[1].scatter(mesh_data['lon'], mesh_data['lat'],
+                                  c=pred, s=3, cmap='RdBu_r',
+                                  vmin=vmin, vmax=vmax, marker='.')
+            axes[1].set_title(f'GNN ({latest_data["label"]}) - t+{h}h | RMSE: {rmse_h*100:.1f}cm, R: {corr_h:.3f}',
+                             fontsize=14, fontweight='bold')
+            axes[1].set_xlabel('Longitude')
+            axes[1].set_ylabel('Latitude')
+            axes[1].set_aspect('equal')
+            plt.colorbar(sc2, ax=axes[1], label='Water Level (m MSL)', shrink=0.8)
+
+            plt.suptitle(f'Water Elevation Comparison - {date_str} - Forecast Hour {h}',
+                        fontsize=16, fontweight='bold')
+            plt.tight_layout()
+
+            out_path = snapshot_dir / f'snapshot_{date_str}_h{h:02d}.png'
+            plt.savefig(out_path, dpi=150, bbox_inches='tight')
+            plt.close()
+            logger.info(f"  Saved: {out_path.name} (RMSE: {rmse_h*100:.1f}cm)")
+
+        logger.info(f"  Snapshots saved to: {snapshot_dir}")
 
     logger.info("\nRollout visualization complete!")
 

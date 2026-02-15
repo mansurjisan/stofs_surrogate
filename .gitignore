@@ -143,3 +143,12 @@ plots/
 # Misc
 phase1
 phase1_completion_report.txt
+
+# Session/AI logs
+*-this-session-*.txt
+
+# Editor backups
+*.bak
+
+# PDF documents in scripts
+scripts/*.pdf

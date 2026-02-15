@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ============================================================
 
-DATA_DIR = Path('/mnt/f/STOFS_TRAINING_DATA/processed_25k_v2')
+DATA_DIR = Path('/mnt/e/STOFS_TRAINING_DATA/processed_25k_v2')
 CHECKPOINT_DIR = Path('/mnt/d/AI_4_STOFS/stofs_surrogate/outputs/checkpoints_25k_v2')
 OUTPUT_DIR = Path('/mnt/d/AI_4_STOFS/stofs_surrogate/outputs/figures_25k_v2')
 
@@ -405,8 +405,8 @@ def main():
     all_checkpoints = [
         ('2-step (ep30)', 'checkpoint_epoch_30.pt', '#1f77b4'),
         ('3-step (ep50)', 'checkpoint_epoch_50.pt', '#ff7f0e'),
-        ('6-step (ep55)', 'checkpoint_epoch_55.pt', '#ff9896'),
         ('6-step (ep60)', 'checkpoint_epoch_60.pt', '#2ca02c'),
+        ('12-step (ep80)', 'checkpoint_epoch_80.pt', '#d62728'),
     ]
 
     # Run all rollouts first and cache results (3 rollouts instead of 12)

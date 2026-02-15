@@ -12,6 +12,12 @@ Key changes from original training:
 4. Shorter training (model already knows local dynamics)
 
 FIXED: Proper multi-step rollout with correct targets/forcing/tidal for each step
+
+MEMORY OPTIMIZATION:
+- Gradient checkpointing enabled for 12+ step rollouts
+- Checkpoints every 2 GNN layers (trades ~25% compute for ~40% memory savings)
+- Aggressive memory cleanup on phase transitions
+- This allows 12-step rollout with 447K edges to fit in 93GB H100
 """
 
 import os
@@ -24,6 +30,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 from torch.amp import autocast, GradScaler
+from torch.utils.checkpoint import checkpoint as grad_checkpoint
 from pathlib import Path
 from datetime import datetime
 import logging
@@ -70,8 +77,12 @@ WEIGHT_DECAY = 1e-5
 GRAD_CLIP = 1.0
 NUM_WORKERS = 4
 USE_AMP = True
-CHECKPOINT_INTERVAL = 2  # Save every 2 epochs (was 5) - important for job resumption
+CHECKPOINT_INTERVAL = 1  # Save every epoch - important for job resumption and analysis
 LOG_EVERY_N_BATCHES = 100
+
+# Gradient checkpointing - enabled for rollout steps >= this threshold
+# Trades ~25% compute overhead for ~40% memory savings
+GRADIENT_CHECKPOINTING_THRESHOLD = 12  # Enable for 12+ step rollouts
 
 # Fine-tuning rollout schedule - all batch=1 due to 447k edges
 ROLLOUT_SCHEDULE = {
@@ -148,6 +159,7 @@ class BatchedTemporalMemoryGNN(nn.Module):
                  forcing_feature_dim=8, edge_feature_dim=3, hidden_dim=128, num_layers=6):
         super().__init__()
         self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
         node_input_dim = 3 * state_dim + temporal_dim + static_feature_dim + forcing_feature_dim
 
         self.node_encoder = nn.Sequential(
@@ -173,7 +185,12 @@ class BatchedTemporalMemoryGNN(nn.Module):
             nn.Linear(hidden_dim // 2, state_dim),
         )
 
-    def forward(self, x, x_prev, dxdt, tidal_harmonics, static_features, forcing, edge_index, edge_attr):
+    def _gnn_block_forward(self, layer_idx, h, edge_index, e):
+        """Helper for checkpointed GNN layer forward."""
+        h_out, e_out = self.gnn_layers[layer_idx](h, edge_index, e)
+        return h_out, e_out
+
+    def forward(self, x, x_prev, dxdt, tidal_harmonics, static_features, forcing, edge_index, edge_attr, use_checkpointing=False):
         node_features = torch.cat([x, x_prev, dxdt, tidal_harmonics, static_features, forcing], dim=-1)
         B, N, F_in = node_features.shape
 
@@ -183,8 +200,29 @@ class BatchedTemporalMemoryGNN(nn.Module):
 
         e = self.edge_encoder(edge_attr)
 
-        for layer in self.gnn_layers:
-            h, e = layer(h, edge_index, e)
+        if use_checkpointing and self.training:
+            # Use gradient checkpointing to save memory
+            # Checkpoint every 2 layers for best memory/compute tradeoff
+            for i in range(0, self.num_layers, 2):
+                # Process 2 layers at a time with checkpointing
+                def create_custom_forward(layer_idx1, layer_idx2):
+                    def custom_forward(h_in, e_in):
+                        h_out, e_out = self.gnn_layers[layer_idx1](h_in, edge_index, e_in)
+                        if layer_idx2 < self.num_layers:
+                            h_out, e_out = self.gnn_layers[layer_idx2](h_out, edge_index, e_out)
+                        return h_out, e_out
+                    return custom_forward
+
+                layer_idx2 = min(i + 1, self.num_layers - 1)
+                h, e = grad_checkpoint(
+                    create_custom_forward(i, layer_idx2 if i + 1 < self.num_layers else i),
+                    h, e,
+                    use_reentrant=False
+                )
+        else:
+            # Standard forward without checkpointing
+            for layer in self.gnn_layers:
+                h, e = layer(h, edge_index, e)
 
         h_flat = h.reshape(B * N, self.hidden_dim)
         delta_flat = self.decoder(h_flat)
@@ -401,6 +439,12 @@ def train_epoch(model, loader, optimizer, criterion, device, num_steps,
     optimizer.zero_grad(set_to_none=True)
     accumulated_loss = 0
 
+    # Enable gradient checkpointing for longer rollouts to save memory
+    use_checkpointing = num_steps >= GRADIENT_CHECKPOINTING_THRESHOLD
+
+    if use_checkpointing:
+        logger.info(f"  Gradient checkpointing ENABLED for {num_steps}-step rollout")
+
     # Loss weights decay exponentially: 1.0, 0.7, 0.5, 0.35, ...
     loss_weights = [0.7 ** i for i in range(num_steps)]
     loss_weights = [w / sum(loss_weights) for w in loss_weights]  # Normalize
@@ -424,7 +468,8 @@ def train_epoch(model, loader, optimizer, criterion, device, num_steps,
 
         with amp_ctx:
             # Step 1: Initial prediction (t -> t+1)
-            pred = model(x, x_prev, dxdt, tidal, static, forcing, edge_index, edge_attr)
+            pred = model(x, x_prev, dxdt, tidal, static, forcing, edge_index, edge_attr,
+                        use_checkpointing=use_checkpointing)
             y = future_targets[:, 0, :].unsqueeze(-1)  # [B, N, 1] - target for step 1
             loss, comp = criterion(pred, y, edge_index)
             loss = loss * loss_weights[0]
@@ -451,7 +496,8 @@ def train_epoch(model, loader, optimizer, criterion, device, num_steps,
 
                 # Forward pass with correct inputs for this step
                 pred_step = model(prev, prev_prev, dxdt_step, tidal_step, static_step,
-                                  forcing_step, edge_index, edge_attr)
+                                  forcing_step, edge_index, edge_attr,
+                                  use_checkpointing=use_checkpointing)
 
                 # Add weighted loss
                 loss_step, _ = criterion(pred_step, y_step, edge_index)
@@ -705,6 +751,7 @@ def main():
     best_val_loss = float('inf')
     history = {'train_loss': [], 'val_loss': []}
     current_batch_size = None
+    current_num_steps = None  # Track rollout steps for phase transitions
     train_loader = None
     val_loader = None
     start_epoch = 1
@@ -771,8 +818,33 @@ def main():
 
         num_steps, batch_size = get_rollout_config(epoch)
 
-        # Recreate loaders if batch size changed
-        if batch_size != current_batch_size:
+        # Detect rollout phase transition - triggers aggressive memory cleanup
+        if current_num_steps is not None and num_steps > current_num_steps:
+            logger.info(f"\n{'='*60}")
+            logger.info(f"PHASE TRANSITION: {current_num_steps}-step -> {num_steps}-step rollout")
+            logger.info(f"{'='*60}")
+
+            # Aggressive memory cleanup before longer rollout
+            if train_loader is not None:
+                del train_loader, val_loader
+                train_loader = None
+                val_loader = None
+            gc.collect()
+            if device.type == 'cuda':
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+                # Report memory status
+                allocated = torch.cuda.memory_allocated() / 1e9
+                reserved = torch.cuda.memory_reserved() / 1e9
+                logger.info(f"  Memory after cleanup: {allocated:.1f}GB allocated, {reserved:.1f}GB reserved")
+
+            if num_steps >= GRADIENT_CHECKPOINTING_THRESHOLD:
+                logger.info(f"  Gradient checkpointing will be enabled for {num_steps}-step phase")
+
+        current_num_steps = num_steps
+
+        # Recreate loaders if batch size changed OR loaders were deleted during phase transition
+        if batch_size != current_batch_size or train_loader is None:
             if train_loader is not None:
                 del train_loader, val_loader
                 gc.collect()
@@ -780,7 +852,7 @@ def main():
                     torch.cuda.empty_cache()
 
             current_batch_size = batch_size
-            logger.info(f"  Adjusting batch size to {batch_size} for {num_steps}-step rollout")
+            logger.info(f"  Creating DataLoader with batch_size={batch_size} for {num_steps}-step rollout")
             train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,
                                        num_workers=NUM_WORKERS, pin_memory=True)
             val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False,
