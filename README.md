@@ -5,7 +5,7 @@ A deep learning surrogate model for NOAA's Surge and Tide Operational Forecast S
 ## Highlights
 
 - **~4,000x speedup**: 48-hour forecast in ~3 seconds on a single GPU vs. hours on an HPC cluster
-- **Full 2D spatial fields**: Operates on ~25,000 nodes extracted from the STOFS-2D Global unstructured mesh over the Mid-Atlantic region (no regular grid interpolation)
+- **Full 2D spatial fields**: Operates on a ~25,000-node subsampled mesh over the Mid-Atlantic region (7% of the ~340K native STOFS-2D Global nodes in this domain)
 - **Physics-informed architecture**: SWE-inspired gradient scaling in message passing, tidal harmonic encoding (6 constituents), temporal memory for phase resolution
 - **Long-range edge augmentation**: 262K strategic long-range edges (+142%) for accelerated tidal/surge signal propagation across estuaries
 - **Ensemble forecasting**: 50-member ensemble in ~4 minutes for uncertainty quantification
@@ -13,9 +13,11 @@ A deep learning surrogate model for NOAA's Surge and Tide Operational Forecast S
 ## Study Domain
 
 Mid-Atlantic Bight and adjacent estuarine systems:
-- **Longitude**: -77.0 to -71.0 W
-- **Latitude**: 36.0 to 41.5 N
+- **Longitude**: -77.0 to -72.0 W
+- **Latitude**: 37.0 to 42.0 N
 - **Key features**: Chesapeake Bay, Delaware Bay, New York Harbor, coastal New Jersey
+- **Native STOFS-2D Global mesh**: 12.8M nodes globally, ~340K wet nodes in this region
+- **Surrogate mesh**: ~25K nodes subsampled via farthest-point sampling (7.4% of native resolution)
 
 ## Model Architecture
 
@@ -48,7 +50,7 @@ Input Features (27 dim)
 |-----------|-------|
 | Hidden dimension | 128 |
 | GNN layers | 6 |
-| Mesh nodes | ~25,000 |
+| Mesh nodes | ~25,000 (subsampled from ~340K native) |
 | Mesh edges | 447,541 (185K original + 262K long-range) |
 | Total parameters | 1,643,015 |
 | Optimizer | AdamW (lr=2e-4, weight_decay=1e-5) |
