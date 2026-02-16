@@ -65,15 +65,18 @@ Input Features (27 dim)
 | t+24h     | 28.9      |
 | t+48h     | 38.4      |
 
-### Station-Level Validation
+### Station-Level Validation (48h rollout, epoch 95, Jan 20 2025)
 
 | Station | Location | RMSE (cm) | Correlation |
 |---------|----------|-----------|-------------|
-| Baltimore     | Chesapeake Bay (inner) | 8.2  | 0.99 |
-| Annapolis     | Chesapeake Bay (mid)   | 10.5 | 0.97 |
-| The Battery   | NY Harbor              | 15.3 | 0.95 |
-| Atlantic City | NJ Coast               | 18.7 | 0.93 |
-| Lewes, DE     | Delaware Bay           | 14.2 | 0.94 |
+| Baltimore     | Chesapeake Bay (inner) | 28.1 | 0.99 |
+| Annapolis     | Chesapeake Bay (mid)   | 36.2 | 0.95 |
+| The Battery   | NY Harbor              | 27.4 | 0.27 |
+| Atlantic City | NJ Coast               | 28.4 | 0.12 |
+| Lewes, DE     | Delaware Bay           | 14.0 | 0.19 |
+| Cape May      | Delaware Bay mouth     | 16.1 | 0.91 |
+| Philadelphia  | Delaware River         | 45.0 | 0.98 |
+| Kiptopeke, VA | Chesapeake Bay mouth   | 42.7 | 0.81 |
 
 ### Computational Performance
 
@@ -104,7 +107,7 @@ Input Features (27 dim)
 ### Station Time Series Validation (48h rollout)
 
 ![Station Validation](docs/figures/station_timeseries_v2.png)
-*48-hour forecast validation at 12 Mid-Atlantic tide gauge stations (Jan 20, 2025). Green: STOFS ground truth. Blue dashed: GNN prediction. The model captures tidal phase and amplitude across protected bays (Baltimore R=0.99) and open coast stations.*
+*48-hour forecast validation at 12 Mid-Atlantic tide gauge stations (Jan 20, 2025, epoch 95). Green: STOFS ground truth. Blue dashed: GNN prediction. Strong tidal phase capture in protected bays (Baltimore R=0.99, Philadelphia R=0.98, Annapolis R=0.95).*
 
 ## Installation
 
