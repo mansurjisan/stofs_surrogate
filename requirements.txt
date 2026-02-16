@@ -14,6 +14,9 @@ torch-sparse
 netCDF4>=1.6.0
 pandas>=2.0.0
 
+# Multi-dimensional arrays
+xarray>=2023.0.0
+
 # Visualization
 matplotlib>=3.7.0
 

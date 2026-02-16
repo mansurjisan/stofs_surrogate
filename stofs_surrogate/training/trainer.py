@@ -287,6 +287,19 @@ class Trainer:
             if self.writer is not None and self.global_step % self.log_every == 0:
                 self.writer.add_scalar('train/loss', loss.item(), self.global_step)
 
+        # Flush any remaining accumulated gradients (tail step)
+        if (batch_idx + 1) % self.grad_accumulation_steps != 0:
+            if self.mixed_precision:
+                self.scaler.unscale_(self.optimizer)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+            else:
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
+                self.optimizer.step()
+            self.optimizer.zero_grad()
+            self.global_step += 1
+
         return total_loss / num_batches
 
     def _validate(self) -> float:
