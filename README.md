@@ -1,11 +1,11 @@
 # STOFS-GNN: Graph Neural Network Surrogate for Storm Surge Forecasting
 
-A deep learning surrogate model for NOAA's Surge and Tide Operational Forecast System (STOFS-2D Global), enabling rapid ensemble storm surge predictions on the native unstructured mesh using a MeshGraphNet-based Graph Neural Network architecture with physics-informed message passing.
+A deep learning surrogate model for NOAA's Surge and Tide Operational Forecast System (STOFS-2D Global), enabling rapid ensemble storm surge predictions on a regional subset of the unstructured mesh using a MeshGraphNet-based Graph Neural Network architecture with physics-informed message passing.
 
 ## Highlights
 
 - **~4,000x speedup**: 48-hour forecast in ~3 seconds on a single GPU vs. hours on an HPC cluster
-- **Full 2D spatial fields**: Operates directly on the ~25,000-node unstructured ADCIRC mesh (no grid interpolation)
+- **Full 2D spatial fields**: Operates on ~25,000 nodes extracted from the STOFS-2D Global unstructured mesh over the Mid-Atlantic region (no regular grid interpolation)
 - **Physics-informed architecture**: SWE-inspired gradient scaling in message passing, tidal harmonic encoding (6 constituents), temporal memory for phase resolution
 - **Long-range edge augmentation**: 262K strategic long-range edges (+142%) for accelerated tidal/surge signal propagation across estuaries
 - **Ensemble forecasting**: 50-member ensemble in ~4 minutes for uncertainty quantification
@@ -255,7 +255,7 @@ Preprocessed training datasets are available upon request from the authors.
 
 ## Key Innovations
 
-1. **First GNN surrogate for operational STOFS-2D Global** at full unstructured mesh resolution
+1. **First GNN surrogate for STOFS-2D Global** operating on the unstructured mesh (25K regional subset)
 2. **Physics-informed message passing** with learnable gradient scaling (γ parameter) embedded in edge updates
 3. **Explicit tidal harmonic encoding** of 6 principal constituents for phase-aware prediction
 4. **Long-range edge augmentation** (+262K edges) for rapid information propagation across estuaries
