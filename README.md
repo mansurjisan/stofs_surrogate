@@ -55,14 +55,15 @@ Input Features (27 dim)
 
 ## Results
 
-### Validation Performance (2025 held-out data)
+### Validation Performance (2025 held-out data, epoch 95)
 
-| Lead Time | RMSE (cm) | Correlation |
-|-----------|-----------|-------------|
-| t+6h      | 21.4      | 0.97        |
-| t+12h     | 32.9      | 0.94        |
-| t+24h     | 50.7      | 0.88        |
-| t+48h     | 58.2      | 0.82        |
+| Lead Time | RMSE (cm) |
+|-----------|-----------|
+| t+1h      | 4.1       |
+| t+6h      | 16.2      |
+| t+12h     | 21.7      |
+| t+24h     | 28.9      |
+| t+48h     | 38.4      |
 
 ### Station-Level Validation
 
@@ -90,15 +91,15 @@ Input Features (27 dim)
 ![Spatial t+24h](docs/figures/spatial_comparison_h24.png)
 *Same comparison at t+24h lead time. RMSE: 28.9 cm, R: 0.930.*
 
-### RMSE vs Lead Time (Multi-Date)
+### RMSE by Lead Time and Training Stage
 
-![RMSE vs Lead Time](docs/figures/rmse_vs_leadtime_multidate.png)
-*RMSE growth with forecast lead time across 4 validation dates (2023 training, 2025 held-out). Mean RMSE: 14.7 cm at t+6h, 31.9 cm at t+48h.*
+![RMSE Table](docs/figures/rmse_table_v2.png)
+*RMSE at each lead time across curriculum learning checkpoints. The 12-step rollout training (epoch 95) achieves 16.2 cm at t+6h and 38.4 cm at t+48h.*
 
 ### Curriculum Learning Progression
 
 ![Curriculum Learning](docs/figures/rollout_rmse_curriculum.png)
-*Effect of curriculum learning: progressive rollout training (1→2→3→6→12 steps) dramatically reduces forecast error at all lead times.*
+*Effect of curriculum learning: progressive rollout training (1→2→3→6→12 steps) dramatically reduces forecast error at all lead times. Best model (ep95, dark blue) reduces 48h RMSE from 69 cm to 38 cm.*
 
 ### Station Time Series Validation (48h rollout)
 
