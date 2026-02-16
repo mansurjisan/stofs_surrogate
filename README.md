@@ -82,18 +82,28 @@ Input Features (27 dim)
 | Hardware | HPC cluster (100+ cores) | Single GPU | - |
 | Energy | ~50 kWh | ~0.01 kWh | ~5,000x |
 
-### Figures
+### Spatial Predictions
 
-| | |
-|---|---|
-| ![Training](docs/figures/optimized_training.png) | ![Rollout](docs/figures/optimized_rollout_timeseries.png) |
-| *Training/validation loss convergence* | *Rollout RMSE vs forecast hour* |
+![Spatial t+6h](docs/figures/spatial_comparison_h06.png)
+*STOFS ground truth (left) vs GNN prediction (right) at t+6h lead time. RMSE: 16.2 cm, R: 0.982.*
 
-![Spatial](docs/figures/optimized_rollout.png)
-*Spatial comparison: GNN prediction vs STOFS ground truth at multiple lead times*
+![Spatial t+24h](docs/figures/spatial_comparison_h24.png)
+*Same comparison at t+24h lead time. RMSE: 28.9 cm, R: 0.930.*
 
-![Stations](docs/figures/station_rollout_comparison_dots.png)
-*48h forecast validation at Mid-Atlantic tide gauge stations*
+### RMSE vs Lead Time (Multi-Date)
+
+![RMSE vs Lead Time](docs/figures/rmse_vs_leadtime_multidate.png)
+*RMSE growth with forecast lead time across 4 validation dates (2023 training, 2025 held-out). Mean RMSE: 14.7 cm at t+6h, 31.9 cm at t+48h.*
+
+### Curriculum Learning Progression
+
+![Curriculum Learning](docs/figures/rollout_rmse_curriculum.png)
+*Effect of curriculum learning: progressive rollout training (1→2→3→6→12 steps) dramatically reduces forecast error at all lead times.*
+
+### Station Time Series Validation (48h rollout)
+
+![Station Validation](docs/figures/station_timeseries_v2.png)
+*48-hour forecast validation at 12 Mid-Atlantic tide gauge stations (Jan 20, 2025). Green: STOFS ground truth. Blue dashed: GNN prediction. The model captures tidal phase and amplitude across protected bays (Baltimore R=0.99) and open coast stations.*
 
 ## Installation
 
