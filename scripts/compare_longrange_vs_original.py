@@ -30,10 +30,11 @@ MESH_ORIGINAL = DATA_DIR / 'mesh.npz'
 MESH_LONGRANGE = Path('/mnt/f/STOFS_TRAINING_DATA/processed_25k_v2_longrange/mesh.npz')
 
 # Checkpoints to compare
-CHECKPOINT_ORIGINAL = Path('/mnt/d/AI_4_STOFS/stofs_surrogate/outputs/checkpoints_25k_v2/checkpoint_epoch_55.pt')
-CHECKPOINT_LONGRANGE = Path('/mnt/d/AI_4_STOFS/stofs_surrogate/outputs/checkpoints_25k_longrange/checkpoint_longrange_epoch_5.pt')
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+CHECKPOINT_ORIGINAL = Path(os.environ.get('STOFS_CHECKPOINT_ORIGINAL', PROJECT_ROOT / 'outputs/checkpoints_25k_v2/checkpoint_epoch_55.pt'))
+CHECKPOINT_LONGRANGE = Path(os.environ.get('STOFS_CHECKPOINT_LONGRANGE', PROJECT_ROOT / 'outputs/checkpoints_25k_longrange/checkpoint_longrange_epoch_5.pt'))
 
-OUTPUT_DIR = Path('/mnt/d/AI_4_STOFS/stofs_surrogate/plots/longrange_comparison')
+OUTPUT_DIR = Path(os.environ.get('STOFS_OUTPUT_DIR', PROJECT_ROOT / 'plots/longrange_comparison'))
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Model config

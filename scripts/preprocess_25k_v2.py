@@ -33,7 +33,8 @@ logger = logging.getLogger(__name__)
 
 # Default paths (can be overridden via arguments)
 DEFAULT_DATA_DIR = '/mnt/f/STOFS_TRAINING_DATA/stofs_data'
-DEFAULT_OUTPUT_DIR = '/mnt/d/AI_4_STOFS/stofs_surrogate/data/processed_25k_v2'
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_OUTPUT_DIR = str(PROJECT_ROOT / 'data/processed_25k_v2')
 
 # Node selection
 MAX_NODES = 25000

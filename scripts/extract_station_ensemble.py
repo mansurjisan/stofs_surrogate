@@ -11,7 +11,7 @@ This script:
 """
 
 import sys
-sys.path.insert(0, '/mnt/d/AI_4_STOFS/stofs_surrogate')
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import numpy as np
 import torch
@@ -355,7 +355,7 @@ def main():
 
     # Generate plots
     logger.info("\nGenerating plots...")
-    output_dir = '/mnt/d/AI_4_STOFS/stofs_surrogate/outputs/figures'
+    output_dir = str(Path(__file__).resolve().parent.parent / 'outputs/figures')
 
     # Individual station plots (first 3)
     for i, name in enumerate(list(valid_stations.keys())[:3]):

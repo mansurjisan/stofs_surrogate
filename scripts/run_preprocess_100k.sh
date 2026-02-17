@@ -25,14 +25,15 @@ echo "Date: $(date)"
 echo "Hostname: $(hostname)"
 echo ""
 
-cd /scratch5/purged/Mansur.Jisan/stofs_surrogate
+PROJECT_DIR="${STOFS_PROJECT_DIR:-$(dirname $(dirname $(readlink -f $0)))}"
+cd "$PROJECT_DIR"
 source ~/venv_stofs/bin/activate
 
 # Directories
-STOFS_RAW="/scratch5/purged/Mansur.Jisan/stofs_surrogate/data/stofs_raw"
-GFS_DIR="/scratch5/purged/Mansur.Jisan/stofs_surrogate/data/gfs_forcing_v2"
-MESH_DIR="/scratch5/purged/Mansur.Jisan/stofs_surrogate/data/processed_100k"
-OUTPUT_DIR="/scratch5/purged/Mansur.Jisan/stofs_surrogate/data/processed_100k"
+STOFS_RAW="$PROJECT_DIR/data/stofs_raw"
+GFS_DIR="$PROJECT_DIR/data/gfs_forcing_v2"
+MESH_DIR="$PROJECT_DIR/data/processed_100k"
+OUTPUT_DIR="$PROJECT_DIR/data/processed_100k"
 
 mkdir -p "$MESH_DIR"
 mkdir -p outputs

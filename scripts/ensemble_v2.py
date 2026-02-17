@@ -33,8 +33,9 @@ logger = logging.getLogger(__name__)
 # ============================================================
 
 DATA_DIR = Path('/mnt/e/STOFS_TRAINING_DATA/processed_25k_v2')
-CHECKPOINT_DIR = Path('/mnt/d/AI_4_STOFS/stofs_surrogate/outputs/checkpoints_25k_v2')
-OUTPUT_DIR = Path('/mnt/d/AI_4_STOFS/stofs_surrogate/outputs/ensemble_v2')
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+CHECKPOINT_DIR = Path(os.environ.get('STOFS_CHECKPOINT_DIR', PROJECT_ROOT / 'outputs/checkpoints_25k_v2'))
+OUTPUT_DIR = Path(os.environ.get('STOFS_OUTPUT_DIR', PROJECT_ROOT / 'outputs/ensemble_v2'))
 
 HIDDEN_DIM = 128
 NUM_LAYERS = 6

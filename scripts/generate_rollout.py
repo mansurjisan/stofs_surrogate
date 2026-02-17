@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Tuple
 
 # Base directory
-OUTPUT_DIR = '/mnt/d/AI_4_STOFS/stofs_surrogate'
+OUTPUT_DIR = str(Path(__file__).resolve().parent.parent)
 
 # Constants
 HIDDEN_DIM = 96

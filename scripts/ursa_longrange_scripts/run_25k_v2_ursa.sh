@@ -36,7 +36,8 @@ echo "Job ID: ${SLURM_JOB_ID:-interactive}"
 echo ""
 
 # Change to project directory
-cd /scratch5/purged/Mansur.Jisan/stofs_surrogate || { echo "ERROR: Could not cd to project dir"; exit 1; }
+PROJECT_DIR="${STOFS_PROJECT_DIR:-$(dirname $(dirname $(dirname $(readlink -f $0))))}"
+cd "$PROJECT_DIR" || { echo "ERROR: Could not cd to project dir: $PROJECT_DIR"; exit 1; }
 
 # Create output directories
 mkdir -p outputs/checkpoints_25k_v2 outputs/figures_25k_v2
@@ -52,7 +53,7 @@ python3 -c "import torch; print(f'  GPU: {torch.cuda.get_device_name(0)}' if tor
 echo ""
 
 # Check data - V2 preprocessed data with 8 forcing features
-DATA_DIR="/scratch5/purged/Mansur.Jisan/stofs_surrogate/data/processed_25k_v2"
+DATA_DIR="$PROJECT_DIR/data/processed_25k_v2"
 NUM_FILES=$(ls -1 $DATA_DIR/processed_*.npz 2>/dev/null | wc -l)
 echo "Data files: $NUM_FILES in $DATA_DIR"
 
@@ -74,7 +75,7 @@ echo ""
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export OMP_NUM_THREADS=8
 export STOFS_DATA_DIR="$DATA_DIR"
-export STOFS_OUTPUT_DIR="/scratch5/purged/Mansur.Jisan/stofs_surrogate"
+export STOFS_OUTPUT_DIR="$PROJECT_DIR"
 
 echo "============================================================"
 echo "STARTING 25K V2 TRAINING ON H100"

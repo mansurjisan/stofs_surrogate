@@ -43,9 +43,10 @@ except ImportError:
 # ============================================================
 
 DATA_DIR = Path('/mnt/e/STOFS_TRAINING_DATA/processed_25k_v2')
-CHECKPOINT_DIR = Path('/mnt/d/AI_4_STOFS/stofs_surrogate/outputs/checkpoints_25k_v2')
-OUTPUT_DIR = Path('/mnt/d/AI_4_STOFS/stofs_surrogate/outputs/figures_25k_v2/enhanced_snapshots')
-GSHHS_PATH = "/mnt/d/STOFS2D-Analysis/My_Scripts/2D-Global-Points-CWL/GSHHS_shp/f/GSHHS_f_L1.shp"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+CHECKPOINT_DIR = Path(os.environ.get('STOFS_CHECKPOINT_DIR', PROJECT_ROOT / 'outputs/checkpoints_25k_v2'))
+OUTPUT_DIR = Path(os.environ.get('STOFS_OUTPUT_DIR', PROJECT_ROOT / 'outputs/figures_25k_v2/enhanced_snapshots'))
+GSHHS_PATH = os.environ.get('GSHHS_PATH', None)  # Optional: path to GSHHS coastline shapefile
 
 # Model config
 HIDDEN_DIM = 128

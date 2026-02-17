@@ -48,13 +48,14 @@ torch.backends.cudnn.allow_tf32 = True
 # ============================================================
 
 # Data from original V2, but mesh from long-range enhanced
-DATA_DIR = Path('/scratch5/purged/Mansur.Jisan/stofs_surrogate/data/processed_25k_v2')
-MESH_DIR = Path('/scratch5/purged/Mansur.Jisan/stofs_surrogate/data/processed_25k_v2_longrange')  # Enhanced mesh
-OUTPUT_DIR = Path('/scratch5/purged/Mansur.Jisan/stofs_surrogate/outputs/checkpoints_25k_longrange')
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+DATA_DIR = Path(os.environ.get('STOFS_DATA_DIR', PROJECT_ROOT / 'data/processed_25k_v2'))
+MESH_DIR = Path(os.environ.get('STOFS_MESH_DIR', PROJECT_ROOT / 'data/processed_25k_v2_longrange'))
+OUTPUT_DIR = Path(os.environ.get('STOFS_OUTPUT_DIR', PROJECT_ROOT / 'outputs/checkpoints_25k_longrange'))
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Resume from pretrained model
-RESUME_FROM = Path('/scratch5/purged/Mansur.Jisan/stofs_surrogate/outputs/checkpoints_25k_v2/checkpoint_epoch_60.pt')
+RESUME_FROM = Path(os.environ.get('STOFS_RESUME_FROM', PROJECT_ROOT / 'outputs/checkpoints_25k_v2/checkpoint_epoch_60.pt'))
 
 # Model config (must match pretrained)
 HIDDEN_DIM = 128

@@ -26,10 +26,11 @@ echo "Hostname: $(hostname)"
 echo ""
 
 # Directories
-RAW_DIR="/scratch5/purged/Mansur.Jisan/stofs_surrogate/data/stofs_raw"
+PROJECT_DIR="${STOFS_PROJECT_DIR:-$(dirname $(dirname $(readlink -f $0)))}"
+RAW_DIR="$PROJECT_DIR/data/stofs_raw"
 mkdir -p "$RAW_DIR"
 
-cd /scratch5/purged/Mansur.Jisan/stofs_surrogate
+cd "$PROJECT_DIR"
 
 # Activate environment
 source ~/venv_stofs/bin/activate

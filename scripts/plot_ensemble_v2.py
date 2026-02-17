@@ -492,7 +492,7 @@ def plot_dashboard(data, station_indices, run_dir):
 def main():
     parser = argparse.ArgumentParser(description='Generate ensemble plots from saved results')
     parser.add_argument('--run_dir', type=str,
-                        default='/mnt/d/AI_4_STOFS/stofs_surrogate/outputs/ensemble_v2/run_20250120_checkpoint_epoch_95')
+                        default=str(Path(__file__).resolve().parent.parent / 'outputs/ensemble_v2/run_20250120_checkpoint_epoch_95'))
     args = parser.parse_args()
 
     run_dir = Path(args.run_dir)

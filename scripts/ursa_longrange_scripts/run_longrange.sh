@@ -31,7 +31,8 @@ echo "Job ID: ${SLURM_JOB_ID:-interactive}"
 echo ""
 
 # Change to project directory
-cd /scratch5/purged/Mansur.Jisan/stofs_surrogate || { echo "ERROR: Could not cd to project dir"; exit 1; }
+PROJECT_DIR="${STOFS_PROJECT_DIR:-$(dirname $(dirname $(dirname $(readlink -f $0))))}"
+cd "$PROJECT_DIR" || { echo "ERROR: Could not cd to project dir: $PROJECT_DIR"; exit 1; }
 
 # Create output directories
 mkdir -p outputs/checkpoints_25k_longrange
@@ -47,8 +48,8 @@ python3 -c "import torch; print(f'  GPU: {torch.cuda.get_device_name(0)}' if tor
 echo ""
 
 # Check data
-DATA_DIR="/scratch5/purged/Mansur.Jisan/stofs_surrogate/data/processed_25k_v2"
-MESH_DIR="/scratch5/purged/Mansur.Jisan/stofs_surrogate/data/processed_25k_v2_longrange"
+DATA_DIR="$PROJECT_DIR/data/processed_25k_v2"
+MESH_DIR="$PROJECT_DIR/data/processed_25k_v2_longrange"
 
 echo "Data directory: $DATA_DIR"
 echo "Mesh directory (long-range): $MESH_DIR"

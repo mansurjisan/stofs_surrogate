@@ -42,9 +42,10 @@ torch.backends.cudnn.allow_tf32 = True
 # Configuration
 # ============================================================
 
-DATA_DIR = Path('/scratch5/purged/Mansur.Jisan/stofs_surrogate/data/processed_25k_v2')
-MESH_DIR = Path('/scratch5/purged/Mansur.Jisan/stofs_surrogate/data/processed_25k_v2_longrange')
-OUTPUT_DIR = Path('/scratch5/purged/Mansur.Jisan/stofs_surrogate/outputs/checkpoints_25k_longrange')
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+DATA_DIR = Path(os.environ.get('STOFS_DATA_DIR', PROJECT_ROOT / 'data/processed_25k_v2'))
+MESH_DIR = Path(os.environ.get('STOFS_MESH_DIR', PROJECT_ROOT / 'data/processed_25k_v2_longrange'))
+OUTPUT_DIR = Path(os.environ.get('STOFS_OUTPUT_DIR', PROJECT_ROOT / 'outputs/checkpoints_25k_longrange'))
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Resume from epoch 50 checkpoint (after 24-step training completes)

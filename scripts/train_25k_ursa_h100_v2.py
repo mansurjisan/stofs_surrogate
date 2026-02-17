@@ -51,8 +51,9 @@ torch.backends.cudnn.allow_tf32 = True
 # CONFIGURATION - V2 with Enhanced Physics
 # ============================================================
 
-DATA_DIR = Path(os.environ.get('STOFS_DATA_DIR', '/scratch5/purged/Mansur.Jisan/stofs_surrogate/data/processed_25k_v2'))
-OUTPUT_DIR = Path(os.environ.get('STOFS_OUTPUT_DIR', '/scratch5/purged/Mansur.Jisan/stofs_surrogate'))
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DATA_DIR = Path(os.environ.get('STOFS_DATA_DIR', PROJECT_ROOT / 'data/processed_25k_v2'))
+OUTPUT_DIR = Path(os.environ.get('STOFS_OUTPUT_DIR', PROJECT_ROOT))
 
 VAL_YEAR = '2025'
 HIDDEN_DIM = 128

@@ -23,7 +23,7 @@ Author: STOFS Surrogate Project
 """
 
 import sys
-sys.path.insert(0, '/mnt/d/AI_4_STOFS/stofs_surrogate')
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import os
 import gc
@@ -111,7 +111,7 @@ def check_memory_warning(config: Dict = None) -> bool:
 
 # Paths
 DATA_DIR = '/mnt/e/Drive2/Good/STOFS_TRAINING_DATA'
-OUTPUT_DIR = '/mnt/d/AI_4_STOFS/stofs_surrogate'
+OUTPUT_DIR = str(Path(__file__).resolve().parent.parent)
 CHECKPOINT_DIR = f'{OUTPUT_DIR}/outputs/checkpoints'
 ENSEMBLE_OUTPUT_DIR = f'{OUTPUT_DIR}/outputs/ensemble'
 

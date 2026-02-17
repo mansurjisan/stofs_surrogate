@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 DATA_DIR = '/mnt/e/Drive2/Good/STOFS_TRAINING_DATA'
-OUTPUT_DIR = '/mnt/d/AI_4_STOFS/stofs_surrogate/data/processed_25k'
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+OUTPUT_DIR = str(PROJECT_ROOT / 'data/processed_25k')
 MESH_FILE = f'{OUTPUT_DIR}/mesh_25k.npz'
 
 # Dates to reprocess

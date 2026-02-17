@@ -5,7 +5,7 @@ Compares GNN predictions with actual STOFS CWL data.
 """
 
 import sys
-sys.path.insert(0, '/mnt/d/AI_4_STOFS/stofs_surrogate')
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import numpy as np
 import torch
@@ -101,7 +101,8 @@ class CWLGNN(nn.Module):
 def load_model_and_data():
     """Load trained model and data."""
     # Load mesh
-    mesh_path = '/mnt/d/AI_4_STOFS/stofs_surrogate/data/processed/us_east_coast_cwl_mesh.npz'
+    project_root = Path(__file__).resolve().parent.parent
+    mesh_path = str(project_root / 'data/processed/us_east_coast_cwl_mesh.npz')
     mesh_data = np.load(mesh_path)
     lon = mesh_data['lon']
     lat = mesh_data['lat']
@@ -109,7 +110,7 @@ def load_model_and_data():
     edge_index_np = mesh_data['edge_index']  # (2, num_edges)
 
     # Load elevation data
-    elev_path = '/mnt/d/AI_4_STOFS/stofs_surrogate/data/processed/us_east_coast_cwl_elevation.npz'
+    elev_path = str(project_root / 'data/processed/us_east_coast_cwl_elevation.npz')
     elev_data = np.load(elev_path)
     elevation = elev_data['elevation']  # (time, nodes)
 
@@ -117,7 +118,7 @@ def load_model_and_data():
     logger.info(f"Elevation shape: {elevation.shape}")
 
     # Load model
-    checkpoint_path = '/mnt/d/AI_4_STOFS/stofs_surrogate/outputs/checkpoints/best_cwl_model.pt'
+    checkpoint_path = str(project_root / 'outputs/checkpoints/best_cwl_model.pt')
     checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
 
     # Get eta_scale from checkpoint
@@ -350,7 +351,8 @@ def main():
     # Plot single detailed snapshot at t+12h
     logger.info("Generating single snapshot comparison...")
     fig1 = plot_single_snapshot(lon, lat, predictions, ground_truth, timestep=12)
-    fig1.savefig('/mnt/d/AI_4_STOFS/stofs_surrogate/outputs/figures/cwl_snapshot_comparison.png',
+    project_root = Path(__file__).resolve().parent.parent
+    fig1.savefig(str(project_root / 'outputs/figures/cwl_snapshot_comparison.png'),
                  dpi=150, bbox_inches='tight')
     logger.info("Saved: outputs/figures/cwl_snapshot_comparison.png")
 
@@ -358,7 +360,7 @@ def main():
     logger.info("Generating multi-timestep comparison...")
     fig2 = plot_comparison(lon, lat, predictions, ground_truth,
                           timesteps=[0, 6, 12, 24])
-    fig2.savefig('/mnt/d/AI_4_STOFS/stofs_surrogate/outputs/figures/cwl_multi_timestep.png',
+    fig2.savefig(str(project_root / 'outputs/figures/cwl_multi_timestep.png'),
                  dpi=150, bbox_inches='tight')
     logger.info("Saved: outputs/figures/cwl_multi_timestep.png")
 

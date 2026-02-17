@@ -12,7 +12,8 @@ from pathlib import Path
 # Paths
 MESH_DIR = Path('/mnt/f/STOFS_TRAINING_DATA/processed_25k_v2_longrange')
 ORIGINAL_MESH = Path('/mnt/f/STOFS_TRAINING_DATA/processed_25k_v2/mesh.npz')
-OUTPUT_DIR = Path('/mnt/d/AI_4_STOFS/stofs_surrogate/plots')
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+OUTPUT_DIR = Path(os.environ.get('STOFS_OUTPUT_DIR', PROJECT_ROOT / 'plots'))
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Region definitions for coloring
