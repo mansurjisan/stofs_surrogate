@@ -65,6 +65,11 @@ Input (27 features per node)
 ![Station Validation](docs/figures/station_timeseries_v2.png)
 *Green: STOFS ground truth. Blue dashed: GNN prediction. Strong tidal phase capture in protected bays (Baltimore R=0.99, Philadelphia R=0.98, Annapolis R=0.95).*
 
+### Ensemble Uncertainty Quantification (20 members)
+
+![Ensemble Forecasts](docs/figures/ensemble_station_panel.png)
+*20-member ensemble via perturbed meteorological forcing (wind, pressure) and initial conditions. Blue: GNN control forecast. Green: STOFS truth. Shading: ensemble spread. Strong skill in protected bays (Baltimore R=0.99, Annapolis R=0.95); wider spread at exposed coastal stations reflects forcing sensitivity.*
+
 ## Repository Structure
 
 - `stofs_surrogate/` — Python package (model, data, training, inference, visualization)
