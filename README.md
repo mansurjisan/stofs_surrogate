@@ -68,7 +68,7 @@ Input (27 features per node)
 - `stofs_surrogate/` — Python package (model, data, training, inference, visualization)
 - `scripts/` — Training, preprocessing, rollout, and visualization scripts
 - `scripts/archived/` — Historical development scripts
-- `docs/` — Paper draft and workflow guides
+- `docs/figures/` — Result figures used in README
 
 Training requires STOFS-2D Global output ([NOAA S3](https://noaa-nos-stofs2d-pds.s3.amazonaws.com/index.html)) and GFS forcing ([NOAA NOMADS](https://nomads.ncep.noaa.gov/)). Preprocessed data available upon request.
 
