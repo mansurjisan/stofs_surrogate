@@ -1,5 +1,7 @@
 # STOFS-GNN: Graph Neural Network Surrogate for Storm Surge Forecasting
 
+![STOFS-GNN Banner](docs/figures/banner.png)
+
 A deep learning surrogate model for NOAA's Surge and Tide Operational Forecast System (STOFS-2D Global), enabling rapid storm surge predictions over the Mid-Atlantic region using a MeshGraphNet-based architecture with physics-informed message passing.
 
 ## Highlights

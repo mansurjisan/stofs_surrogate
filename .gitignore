@@ -134,6 +134,8 @@ Thumbs.db
 
 # Screenshots
 *.png
+# But keep README figures
+!docs/figures/*.png
 
 # Large data directories
 data/
