@@ -39,8 +39,10 @@ Input (27 features per node)
 
 | | |
 |---|---|
+| **Training data** | STOFS-2D Global daily forecasts, Jan 2023 – Dec 2024 (~700 days) |
+| **Validation data** | Jan 2025 – present (held-out year) |
 | **Hardware** | NVIDIA H100 80GB (NOAA URSA HPC) |
-| **Training time** | ~3–5 hours (100 epochs) |
+| **Training time** | ~2–3 weeks (100 epochs with curriculum rollout) |
 | **Optimizer** | AdamW (lr=2e-4, weight decay=1e-5) |
 | **Scheduler** | Cosine annealing (η_min=1e-6) |
 | **Precision** | Mixed (AMP) |
