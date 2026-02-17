@@ -13,6 +13,8 @@ A deep learning surrogate model for NOAA's Surge and Tide Operational Forecast S
 
 ## Study Domain
 
+![Study Domain](docs/figures/study_domain.png)
+
 Mid-Atlantic Bight (-77 to -72 W, 37 to 42 N): Chesapeake Bay, Delaware Bay, New York Harbor, and coastal New Jersey. The native STOFS-2D Global mesh has 12.8M nodes globally; the surrogate operates on a ~25K-node regional subset with median edge spacing of ~0.9 km (vs ~0.17 km native).
 
 ## Model Architecture
