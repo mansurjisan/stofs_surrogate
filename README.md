@@ -2,7 +2,7 @@
 
 ![STOFS-GNN Banner](docs/figures/banner.png)
 
-A physics-informed deep learning surrogate for NOAA's Surge and Tide Operational Forecast System (STOFS-2D Global). Uses a MeshGraphNet architecture with SWE-inspired message passing to enable rapid storm surge predictions over the Mid-Atlantic region — replacing hours of numerical simulation with a ~3 second inference on a single GPU.
+A physics-informed deep learning surrogate for NOAA's Surge and Tide Operational Forecast System (STOFS-2D Global). Uses a MeshGraphNet architecture with shallow water equation (SWE)-inspired message passing to enable rapid storm surge predictions over the Mid-Atlantic region — replacing hours of numerical simulation with a ~3 second inference on a single GPU.
 
 ## Highlights
 
