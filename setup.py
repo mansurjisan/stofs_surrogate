@@ -18,7 +18,7 @@ setup(
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Science/Research",
-        "License :: OSI Approved :: MIT License",
+        "License :: Public Domain",
         "Operating System :: OS Independent",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.10",
@@ -36,6 +36,7 @@ setup(
         "matplotlib>=3.7.0",
         "pandas>=2.0.0",
         "tqdm>=4.65.0",
+        "xarray>=2023.0.0",
     ],
     extras_require={
         "dev": [
@@ -52,9 +53,5 @@ setup(
             "searvey>=0.3.0",
         ],
     },
-    entry_points={
-        "console_scripts": [
-            "stofs-train=scripts.train_cwl_gnn_optimized_v3:main",
-        ],
-    },
+    entry_points={},
 )

@@ -1,196 +1,96 @@
-# STOFS-GNN: Physics-Informed Graph Neural Network for Storm Surge Forecasting
+# STOFS-GNN: Graph Neural Network Surrogate for Storm Surge Forecasting
 
-A deep learning surrogate model for NOAA's Surge and Tide Operational Forecast System (STOFS), enabling rapid ensemble storm surge predictions using Graph Neural Networks.
+![STOFS-GNN Banner](docs/figures/banner.png)
+
+A deep learning surrogate model for NOAA's Surge and Tide Operational Forecast System (STOFS-2D Global), enabling rapid storm surge predictions over the Mid-Atlantic region using a MeshGraphNet-based architecture with physics-informed message passing.
 
 ## Highlights
 
-- **~100x faster** than full numerical model for 48-hour forecasts
-- **50-member ensemble** in ~4 minutes on RTX 3050 Ti
-- **Physics-informed** architecture with SWE-inspired message passing
-- **Full 2D spatial fields** (15,000 nodes), not just station predictions
+- **~4,000x speedup** over numerical model (48h forecast in ~3 seconds on a single GPU)
+- **25,000-node subsampled mesh** from the STOFS-2D Global unstructured grid (7.4% of ~340K native nodes in domain)
+- **Physics-informed GNN** with SWE-inspired gradient scaling, 6-constituent tidal encoding, and temporal memory
+- **Long-range edge augmentation** (+262K edges) for tidal/surge signal propagation across estuaries
 
-## Results
+## Study Domain
 
-### Training Convergence
-
-![Training Progress](docs/figures/optimized_training.png)
-
-*Left: Training and validation loss over 150 epochs. Right: Loss components (MSE, Mass conservation, Smoothness).*
-
-### Rollout Performance
-
-| Lead Time | RMSE (m) | Correlation |
-|-----------|----------|-------------|
-| t+1h      | 0.057    | - |
-| t+6h      | 0.195    | 0.81 |
-| t+12h     | 0.317    | - |
-| t+24h     | 0.449    | 0.01 |
-| t+48h     | 0.296    | - |
-
-![Rollout Analysis](docs/figures/optimized_rollout_timeseries.png)
-
-*Top-left: Domain-average water surface elevation (predicted vs ground truth). Top-right: RMSE vs forecast hour. Bottom: Scatter plots at t+6h and t+24h lead times.*
-
-### Spatial Predictions
-
-![Spatial Rollout](docs/figures/optimized_rollout.png)
-
-*Spatial comparison of GNN predictions vs STOFS ground truth at multiple forecast hours. Columns show prediction, ground truth, absolute error, and signed error.*
-
-### Station Validation (48h forecast)
-
-| Station | RMSE (m) | Correlation |
-|---------|----------|-------------|
-| Atlantic City | 0.40 | 0.45 |
-| Sandy Hook | 0.59 | 0.36 |
-| The Battery | 0.46 | 0.53 |
-| Lewes, DE | 0.51 | 0.30 |
-
-![Station Comparison](docs/figures/station_rollout_comparison_dots.png)
-
-*48-hour forecast validation at Mid-Atlantic tide gauge stations. Blue: STOFS ground truth. Orange: GNN predictions.*
-
-## Installation
-
-```bash
-# Clone repository
-git clone https://github.com/mansurjisan/stofs_surrogate.git
-cd stofs_surrogate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Install PyTorch Geometric
-pip install torch-geometric
-pip install pyg_lib torch_scatter torch_sparse -f https://data.pyg.org/whl/torch-2.0.0+cu118.html
-
-# Install package (optional)
-pip install -e .
-```
-
-## Quick Start
-
-### Training
-
-```bash
-# Preprocess STOFS data
-python scripts/train_cwl_gnn_optimized_v3.py --preprocess
-
-# Train model
-python scripts/train_cwl_gnn_optimized_v3.py --train
-```
-
-### Ensemble Inference
-
-```bash
-python scripts/ensemble_inference.py \
-    --preprocessed data/processed/processed_20251128.npz \
-    --n_members 50 \
-    --forecast_hours 48
-```
-
-### Visualization
-
-```bash
-python scripts/plot_rollout_timeseries.py \
-    --checkpoint outputs/checkpoints/best_optimized_model.pt \
-    --date 20251130
-```
-
-## Project Structure
-
-```
-stofs_surrogate/
-├── stofs_surrogate/           # Main package
-│   ├── models/                # GNN architectures
-│   │   └── gnn.py             # PhysicsInformedCWLModel, SWEInspiredGraphBlock
-│   ├── data/                  # Data utilities
-│   │   ├── dataset.py         # PyTorch dataset classes
-│   │   ├── mesh.py            # Mesh processing
-│   │   └── preprocessing.py   # STOFS data preprocessing
-│   ├── training/              # Training utilities
-│   │   └── trainer.py
-│   ├── inference/             # Inference utilities
-│   │   ├── ensemble.py        # Ensemble forecaster
-│   │   └── stations.py        # Station extraction
-│   └── visualization/         # Plotting utilities
-│       └── plots.py
-├── scripts/                   # Executable scripts
-│   ├── train_cwl_gnn_optimized_v3.py
-│   ├── ensemble_inference.py
-│   └── plot_rollout_timeseries.py
-├── configs/                   # Configuration files
-│   ├── train_default.yaml
-│   └── ensemble.yaml
-├── docs/                      # Documentation
-│   ├── TRAINING.md
-│   └── ENSEMBLE.md
-├── tests/                     # Unit tests
-├── setup.py
-├── pyproject.toml
-└── requirements.txt
-```
+Mid-Atlantic Bight (-77 to -72 W, 37 to 42 N): Chesapeake Bay, Delaware Bay, New York Harbor, and coastal New Jersey. The native STOFS-2D Global mesh has 12.8M nodes globally; the surrogate operates on a ~25K-node regional subset with median edge spacing of ~0.9 km (vs ~0.17 km native).
 
 ## Model Architecture
 
+Built on [MeshGraphNet](https://arxiv.org/abs/2010.03409) (Pfaff et al., 2021):
+
 ```
-Input: [cwl_t, static_features, forcing]
-    → Node Encoder (MLP)
-    → 6× SWE-Inspired Graph Blocks (message passing)
-    → Decoder (MLP)
-    → cwl_{t+1}
+Input (27 features per node)
+├── State:    η(t), η(t-1), dη/dt                       [3]
+├── Tidal:    sin/cos of M2, S2, N2, K1, O1, M4         [12]
+├── Static:   x, y, depth, water_level                   [4]
+└── Forcing:  u10, v10, |V|, |V|², θ, P, ∂P/∂x, ∂P/∂y  [8]
+    → Node Encoder (MLP: 27 → 128)
+    → 6× SWE Graph Blocks with gradient scaling: m × (1 + tanh(γ·∇h))
+    → Decoder (MLP: 128 → 1)
+    → η(t+1) = η(t) + Δη
 ```
 
-### Features
+~1.6M parameters. Trained with curriculum learning (rollout steps 1→2→3→6→12) on NOAA URSA H100 GPUs using AdamW with cosine annealing.
 
-**Static Features (4):**
-- Normalized x, y coordinates
-- Log-normalized depth
-- Water level (depth + CWL)
+## Results
 
-**Forcing Features (3):**
-- U10 wind component (normalized)
-- V10 wind component (normalized)
-- Surface pressure
+### Validation (2025 held-out data, epoch 95)
 
-### Configuration
+| Lead Time | RMSE (cm) |
+|-----------|-----------|
+| t+1h      | 4.1       |
+| t+6h      | 16.2      |
+| t+12h     | 21.7      |
+| t+24h     | 28.9      |
+| t+48h     | 38.4      |
 
-| Parameter | Value |
-|-----------|-------|
-| Hidden dim | 96 |
-| Num layers | 6 |
-| Mesh nodes | ~15,000 |
-| ETA_SCALE | 2.0 |
-| WIND_SCALE | 15.0 |
+### Spatial Predictions
 
-## Data Sources
+![Spatial t+6h](docs/figures/spatial_comparison_h06.png)
+*STOFS ground truth (left) vs GNN prediction (right) at t+6h. RMSE: 16.2 cm, R: 0.982.*
 
-- **STOFS Global**: NOAA operational storm surge forecasts
-- **CO-OPS**: NOAA tide gauge observations for validation
+![Spatial t+24h](docs/figures/spatial_comparison_h24.png)
+*Same at t+24h. RMSE: 28.9 cm, R: 0.930.*
 
-## Requirements
+### Curriculum Learning Progression
 
-- Python 3.10+
-- PyTorch 2.0+
-- PyTorch Geometric 2.4+
-- CUDA-capable GPU (4GB+ VRAM recommended)
+![Curriculum Learning](docs/figures/rollout_rmse_curriculum.png)
+*Progressive rollout training reduces 48h RMSE from 69 cm (early) to 38 cm (epoch 95).*
+
+![RMSE Table](docs/figures/rmse_table_v2.png)
+
+### Station Validation (48h rollout, Jan 20 2025)
+
+![Station Validation](docs/figures/station_timeseries_v2.png)
+*Green: STOFS ground truth. Blue dashed: GNN prediction. Strong tidal phase capture in protected bays (Baltimore R=0.99, Philadelphia R=0.98, Annapolis R=0.95).*
+
+### Ensemble Uncertainty Quantification (20 members)
+
+![Ensemble Forecasts](docs/figures/ensemble_station_panel.png)
+*20-member ensemble via perturbed meteorological forcing (wind, pressure) and initial conditions. Blue: GNN control forecast. Green: STOFS truth. Shading: ensemble spread. Strong skill in protected bays (Baltimore R=0.99, Annapolis R=0.95); wider spread at exposed coastal stations reflects forcing sensitivity.*
+
+## Repository Structure
+
+- `stofs_surrogate/` — Python package (model, data, training, inference, visualization)
+- `scripts/` — Training, preprocessing, rollout, and visualization scripts
+- `scripts/archived/` — Historical development scripts
+- `docs/figures/` — Result figures used in README
+
+Training requires STOFS-2D Global output ([NOAA S3](https://noaa-nos-stofs2d-pds.s3.amazonaws.com/index.html)) and GFS forcing ([NOAA NOMADS](https://nomads.ncep.noaa.gov/)). Preprocessed data available upon request.
 
 ## License
 
-MIT License
+Public domain (17 U.S.C. § 105). See [LICENSE](LICENSE).
 
 ## Citation
 
 ```bibtex
-@software{stofs_surrogate,
-  author = {Jisan, Mansur},
-  title = {STOFS-GNN: Physics-Informed Graph Neural Network for Storm Surge Forecasting},
-  year = {2024},
+@software{jisan2025stofsgnn,
+  author = {Jisan, Mansur Ali},
+  title = {STOFS-GNN: Graph Neural Network Surrogate for Operational Storm Surge Forecasting},
+  year = {2025},
+  institution = {NOAA/NOS/CO-OPS},
   url = {https://github.com/mansurjisan/stofs_surrogate}
 }
 ```
-
-## Acknowledgments
-
-- NOAA/NOS for STOFS operational data
-- PyTorch Geometric team for GNN framework

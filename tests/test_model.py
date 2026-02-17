@@ -5,65 +5,61 @@ import torch
 import numpy as np
 
 
-def test_swe_block_shape():
-    """Test SWE-inspired graph block output shape."""
-    # Import here to avoid import errors if package not installed
+def test_graph_block_shape():
+    """Test GraphNetworkBlock output shape."""
     import sys
     sys.path.insert(0, '.')
 
-    from stofs_surrogate.models.gnn import SWEInspiredGraphBlock
+    from stofs_surrogate.models.gnn import GraphNetworkBlock
 
+    node_dim = 64
+    edge_dim = 64
     hidden_dim = 64
     num_nodes = 100
     num_edges = 300
 
-    block = SWEInspiredGraphBlock(hidden_dim)
+    block = GraphNetworkBlock(node_dim, edge_dim, hidden_dim)
 
     # Create dummy inputs
-    x = torch.randn(num_nodes, hidden_dim)
+    x = torch.randn(num_nodes, node_dim)
     edge_index = torch.randint(0, num_nodes, (2, num_edges))
-    edge_attr = torch.randn(num_edges, 3)
+    edge_attr = torch.randn(num_edges, edge_dim)
 
     # Forward pass
-    out = block(x, edge_index, edge_attr)
+    h_out, e_out = block(x, edge_index, edge_attr)
 
-    assert out.shape == (num_nodes, hidden_dim)
+    assert h_out.shape == (num_nodes, node_dim)
+    assert e_out.shape == (num_edges, edge_dim)
 
 
 def test_model_forward():
-    """Test full model forward pass."""
+    """Test full STOFSSurrogateGNN forward pass."""
     import sys
     sys.path.insert(0, '.')
 
-    from stofs_surrogate.models.gnn import PhysicsInformedCWLModel
+    from stofs_surrogate.models.gnn import STOFSSurrogateGNN
 
-    # Model config
-    hidden_dim = 64
-    num_layers = 3
-    static_features = 4
-    forcing_features = 3
-
-    model = PhysicsInformedCWLModel(
-        hidden_dim=hidden_dim,
-        num_layers=num_layers,
-        static_features=static_features,
-        forcing_features=forcing_features
+    model = STOFSSurrogateGNN(
+        state_dim=1,
+        node_feature_dim=3,
+        edge_feature_dim=3,
+        forcing_dim=3,
+        hidden_dim=64,
+        num_layers=3,
     )
 
-    # Create dummy inputs
     num_nodes = 100
     num_edges = 300
 
-    cwl = torch.randn(num_nodes, 1)
-    static = torch.randn(num_nodes, static_features)
-    forcing = torch.randn(num_nodes, forcing_features)
+    state = torch.randn(num_nodes, 1)
+    node_features = torch.randn(num_nodes, 3)
+    forcing = torch.randn(num_nodes, 3)
     edge_index = torch.randint(0, num_nodes, (2, num_edges))
     edge_attr = torch.randn(num_edges, 3)
 
-    # Forward pass
     model.eval()
     with torch.no_grad():
-        out = model(cwl, static, forcing, edge_index, edge_attr)
+        out = model(state, node_features, edge_index, edge_attr, forcing=forcing)
 
     assert out.shape == (num_nodes, 1)
 
@@ -73,34 +69,49 @@ def test_model_gradient_flow():
     import sys
     sys.path.insert(0, '.')
 
-    from stofs_surrogate.models.gnn import PhysicsInformedCWLModel
+    from stofs_surrogate.models.gnn import STOFSSurrogateGNN
 
-    model = PhysicsInformedCWLModel(
+    model = STOFSSurrogateGNN(
+        state_dim=1,
+        node_feature_dim=3,
+        edge_feature_dim=3,
         hidden_dim=32,
         num_layers=2,
-        static_features=4,
-        forcing_features=3
     )
 
     num_nodes = 50
     num_edges = 150
 
-    cwl = torch.randn(num_nodes, 1, requires_grad=True)
-    static = torch.randn(num_nodes, 4)
-    forcing = torch.randn(num_nodes, 3)
+    state = torch.randn(num_nodes, 1, requires_grad=True)
+    node_features = torch.randn(num_nodes, 3)
     edge_index = torch.randint(0, num_nodes, (2, num_edges))
     edge_attr = torch.randn(num_edges, 3)
 
-    out = model(cwl, static, forcing, edge_index, edge_attr)
+    out = model(state, node_features, edge_index, edge_attr)
     loss = out.sum()
     loss.backward()
 
-    assert cwl.grad is not None
-    assert not torch.all(cwl.grad == 0)
+    assert state.grad is not None
+    assert not torch.all(state.grad == 0)
+
+
+def test_create_model():
+    """Test model factory function."""
+    import sys
+    sys.path.insert(0, '.')
+
+    from stofs_surrogate.models.gnn import create_model
+
+    model = create_model('stofs_gnn', state_dim=1, hidden_dim=32, num_layers=2)
+    assert isinstance(model, torch.nn.Module)
+
+    model2 = create_model('simple', input_dim=1, hidden_dim=32, num_layers=2)
+    assert isinstance(model2, torch.nn.Module)
 
 
 if __name__ == "__main__":
-    test_swe_block_shape()
+    test_graph_block_shape()
     test_model_forward()
     test_model_gradient_flow()
+    test_create_model()
     print("All model tests passed!")

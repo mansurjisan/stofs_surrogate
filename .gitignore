@@ -134,6 +134,8 @@ Thumbs.db
 
 # Screenshots
 *.png
+# But keep README figures
+!docs/figures/*.png
 
 # Large data directories
 data/
@@ -143,3 +145,17 @@ plots/
 # Misc
 phase1
 phase1_completion_report.txt
+
+# Local docs (paper draft, guides, archived, experiment log)
+docs/*.md
+docs/archived/
+EXPERIMENT_LOG.md
+
+# Session/AI logs
+*-this-session-*.txt
+
+# Editor backups
+*.bak
+
+# PDF documents in scripts
+scripts/*.pdf
