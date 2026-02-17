@@ -87,10 +87,3 @@ Public domain (17 U.S.C. § 105). See [LICENSE](LICENSE).
   url = {https://github.com/mansurjisan/stofs_surrogate}
 }
 ```
-
-## Acknowledgments
-
-- NOAA/NOS/CO-OPS for STOFS operational data and computational resources
-- NOAA URSA HPC for H100 GPU access
-- [MeshGraphNet](https://arxiv.org/abs/2010.03409) (Pfaff et al., 2021) as the foundational architecture
-- PyTorch Geometric team
