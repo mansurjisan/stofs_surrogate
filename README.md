@@ -33,7 +33,20 @@ Input (27 features per node)
     → η(t+1) = η(t) + Δη
 ```
 
-~1.6M parameters. Trained with curriculum learning (rollout steps 1→2→3→6→12) on NOAA URSA H100 GPUs using AdamW with cosine annealing.
+~1.6M parameters.
+
+## Training
+
+| | |
+|---|---|
+| **Hardware** | NVIDIA H100 80GB (NOAA URSA HPC) |
+| **Training time** | ~3–5 hours (100 epochs) |
+| **Optimizer** | AdamW (lr=2e-4, weight decay=1e-5) |
+| **Scheduler** | Cosine annealing (η_min=1e-6) |
+| **Precision** | Mixed (AMP) |
+| **Effective batch** | 64 (batch=4 × grad accumulation=16) |
+| **Curriculum** | Rollout steps 1→2→3→6→12 over 100 epochs |
+| **Inference** | ~3 seconds for 48h forecast (single GPU) |
 
 ## Results
 
