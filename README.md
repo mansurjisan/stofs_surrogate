@@ -19,7 +19,7 @@ Mid-Atlantic Bight (-77 to -72 W, 37 to 42 N): Chesapeake Bay, Delaware Bay, New
 
 ## Model Architecture
 
-Built on [MeshGraphNet](https://arxiv.org/abs/2010.03409) (Pfaff et al., 2021):
+A physics-informed GNN built on [MeshGraphNet](https://arxiv.org/abs/2010.03409) (Pfaff et al., 2021). The graph blocks incorporate shallow water equation (SWE) physics through bathymetric gradient scaling, which modulates message passing strength based on local depth gradients — amplifying information flow in regions of steep bathymetry where surge dynamics are most active.
 
 ```
 Input (27 features per node)
