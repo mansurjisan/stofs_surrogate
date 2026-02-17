@@ -144,9 +144,10 @@ plots/
 phase1
 phase1_completion_report.txt
 
-# Local docs (paper draft, guides, archived)
+# Local docs (paper draft, guides, archived, experiment log)
 docs/*.md
 docs/archived/
+EXPERIMENT_LOG.md
 
 # Session/AI logs
 *-this-session-*.txt
