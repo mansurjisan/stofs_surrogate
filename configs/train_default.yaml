@@ -1,45 +1,107 @@
-# Default training configuration for STOFS GNN Surrogate
+# Canonical training configuration -- STOFS-GNN (Mid-Atlantic surrogate)
+# =======================================================================
+# Single source of truth for the architecture and training recipe documented in
+# README.md. NOTE: nothing in the repo currently *loads* this file -- the training
+# scripts take CLI arguments -- so this YAML documents the configuration rather than
+# driving it. Keep it in sync with README.md.
+#
+# TODO(user): confirm this matches the run that produced the README RMSE table.
+#   This file was written to match the numbers stated in README.md. The two previous
+#   configs disagreed with the README and with each other:
+#
+#     config/config.yaml (deleted in this phase):
+#       - model.stofs_gnn.num_layers = 8        (README / here: 6 blocks)
+#       - model.simple.hidden_dim    = 64       (README / here: 128)
+#       - data.eta_scale             = 3.0      (README implies / here: 2.0)
+#       - training.learning_rate     = 1e-3     (README / here: 2e-4)
+#       - no domain / mesh / curriculum keys at all
+#
+#     configs/train_default.yaml (old version, replaced by this file):
+#       - model.hidden_dim   = 96               (README / here: 128)
+#       - model.num_layers   = 6                (matches README)
+#       - domain             = -76..-73 W / 38..41 N   (README / here: -77..-72 / 37..42)
+#       - domain.max_nodes   = 15000            (README / here: ~25000)
+#       - training.learning_rate = 1e-3         (README / here: 2e-4)
+#       - training.weight_decay  = 1e-4         (README / here: 1e-5)
+#       - training.num_epochs    = 150          (README / here: 100)
+#       - scheduler = ReduceLROnPlateau         (README / here: cosine annealing)
+#
+#   ALSO (architecture gap, important): the in-package model
+#   stofs_surrogate/models/gnn.py (STOFSSurrogateGNN) is a base MeshGraphNet whose node
+#   input is ~6 dims (state + x/y/depth [+ optional forcing]). It does NOT implement the
+#   27-feature physics-informed architecture documented below and in the README
+#   (tidal encoding, SWE bathymetric-gradient scaling, temporal memory, long-range edge
+#   augmentation). That architecture lives in the historical training scripts, which are
+#   preserved on the `dev-history` branch (they were removed from `main` in this phase).
+#   Confirm which script + config produced the reported RMSE before citing this file.
 
-# Model architecture
+# --- Model architecture (README "Model Architecture") -----------------------------
 model:
-  hidden_dim: 96
-  num_layers: 6
-  static_features: 4
-  forcing_features: 3
-  dropout: 0.1
+  name: "stofs_gnn"
+  hidden_dim: 128             # README: node encoder 27 -> 128, decoder 128 -> 1
+  num_blocks: 6               # README: 6x SWE Graph Blocks
+  activation: "relu"
+  approx_params: 1_600_000    # README: ~1.6M parameters (documentation only)
+  # Physics-informed components described in the README:
+  physics:
+    swe_gradient_scaling: true   # message scaling m * (1 + tanh(gamma * grad_h))
+    tidal_encoding: true         # 6 constituents: M2, S2, N2, K1, O1, M4
+    temporal_memory: true        # eta(t-1) and d_eta/dt in the state
+    long_range_edges: true       # +262K augmented edges for signal propagation
 
-# Training parameters
-training:
-  batch_size: 1
-  num_epochs: 150
-  learning_rate: 0.001
-  weight_decay: 0.0001
-  scheduler:
-    type: "ReduceLROnPlateau"
-    patience: 15
-    factor: 0.5
-    min_lr: 0.00001
+# --- Input features: 27 per node (README "Model Architecture" diagram) -------------
+features:
+  state: 3      # eta(t), eta(t-1), d_eta/dt
+  tidal: 12     # sin/cos of M2, S2, N2, K1, O1, M4
+  static: 4     # x, y, depth, water_level
+  forcing: 8    # u10, v10, |V|, |V|^2, theta, P, dP/dx, dP/dy
+  total: 27
 
-# Data normalization
-normalization:
-  eta_scale: 2.0
-  wind_scale: 15.0
-
-# Domain configuration
+# --- Domain (README: Mid-Atlantic Bight) -------------------------------------------
 domain:
   name: "mid_atlantic"
-  lon_min: -76.0
-  lon_max: -73.0
-  lat_min: 38.0
-  lat_max: 41.0
-  max_nodes: 15000
+  lon_min: -77.0
+  lon_max: -72.0
+  lat_min: 37.0
+  lat_max: 42.0
 
-# Paths
+# --- Mesh (README: 25K-node subsampled regional mesh) ------------------------------
+mesh:
+  max_nodes: 25000            # README: ~25,000 nodes (7.4% of ~340K native in-domain)
+  long_range_edges: 262000    # README: +262K augmented edges
+
+# --- Training recipe (README "Training" table) -------------------------------------
+training:
+  num_epochs: 100
+  optimizer: "AdamW"
+  learning_rate: 0.0002       # README: lr = 2e-4
+  weight_decay: 0.00001       # README: weight decay = 1e-5
+  scheduler:
+    type: "CosineAnnealingLR" # README: cosine annealing
+    eta_min: 0.000001         # README: eta_min = 1e-6
+  batch_size: 4
+  grad_accumulation_steps: 16 # README: effective batch = 64 (4 x 16)
+  effective_batch_size: 64
+  grad_clip: 1.0              # operational default (not stated in README)
+  mixed_precision: true       # README: mixed precision (AMP)
+  # README: curriculum rollout steps 1 -> 2 -> 3 -> 6 -> 12 over 100 epochs
+  curriculum_rollout: [1, 2, 3, 6, 12]
+
+# --- Normalization (corroborated by tests/test_data.py) ----------------------------
+normalization:
+  eta_scale: 2.0              # max expected surge (m); README does not state a value
+  wind_scale: 15.0            # m/s
+
+# --- Data windows (README "Training" table) ----------------------------------------
+data:
+  train_window: "2023-01 .. 2024-12"   # ~700 days of STOFS-2D Global daily forecasts
+  val_window: "2025-01 .. present"      # held-out year
+
+# --- Paths -------------------------------------------------------------------------
 paths:
   data_dir: "data/processed"
   checkpoint_dir: "outputs/checkpoints"
   figure_dir: "outputs/figures"
 
-# Device
+# --- Hardware (README: NVIDIA H100 80GB, NOAA URSA HPC) ----------------------------
 device: "cuda"
-mixed_precision: true

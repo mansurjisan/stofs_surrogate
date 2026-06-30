@@ -90,9 +90,11 @@ Input (27 features per node)
 ## Repository Structure
 
 - `stofs_surrogate/` — Python package (model, data, training, inference, visualization)
+- `configs/` — Training and ensemble configuration (architecture + hyperparameters)
 - `scripts/` — Training, preprocessing, rollout, and visualization scripts
-- `scripts/archived/` — Historical development scripts
 - `docs/figures/` — Result figures used in README
+
+See [`docs/REPO_STRUCTURE.md`](docs/REPO_STRUCTURE.md) for the full package layout. Earlier development scripts are preserved on the `dev-history` branch.
 
 Training requires STOFS-2D Global output ([NOAA S3](https://noaa-nos-stofs2d-pds.s3.amazonaws.com/index.html)) and GFS forcing ([NOAA NOMADS](https://nomads.ncep.noaa.gov/)). Preprocessed data available upon request.
 

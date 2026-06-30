@@ -148,6 +148,7 @@ phase1_completion_report.txt
 
 # Local docs (paper draft, guides, archived, experiment log)
 docs/*.md
+!docs/REPO_STRUCTURE.md
 docs/archived/
 EXPERIMENT_LOG.md
 
