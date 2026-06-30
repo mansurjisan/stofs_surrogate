@@ -1,31 +1,44 @@
-# STOFS Surrogate Model - Requirements
+# STOFS Surrogate Model - runtime requirements
+# =============================================
+# Pinned to compatible-release (~=) on the minor version: reproducible enough for
+# CI/Docker while tolerating patch updates across Python 3.10 / 3.11.
+#
+# torch-scatter / torch-sparse were REMOVED. This package only uses torch_geometric
+# (Data, MessagePassing, DataLoader), whose scatter/aggregation ops ship natively in
+# PyG >= 2.5. Install torch-scatter/-sparse separately (matched to your exact
+# torch + CUDA build) only if you need their accelerated kernels.
+#
+# CPU-only install (CI / Docker) -- install torch from the CPU wheel index first so a
+# CUDA build is not pulled in:
+#     pip install torch~=2.5 --index-url https://download.pytorch.org/whl/cpu
+#     pip install -r requirements.txt
+#
+# TODO(user): these anchors were chosen for broad 3.10-3.13 wheel availability, not
+#   verified against the original H100 training stack. For an exact, fully reproducible
+#   environment, generate a lockfile (e.g. `pip-compile`) from the training machine.
 
 # Core ML
-torch>=2.0.0
-numpy>=1.24.0
-scipy>=1.10.0
+torch~=2.5
+numpy~=2.1
+scipy~=1.13
 
-# Graph Neural Networks
-torch-geometric>=2.4.0
-torch-scatter
-torch-sparse
+# Graph Neural Networks (PyG >= 2.5 needs no torch-scatter/torch-sparse here)
+torch-geometric~=2.6
 
 # Data handling
-netCDF4>=1.6.0
-pandas>=2.0.0
-
-# Multi-dimensional arrays
-xarray>=2023.0.0
+netCDF4~=1.7
+pandas~=2.2
+xarray~=2024.6
 
 # Visualization
-matplotlib>=3.7.0
+matplotlib~=3.9
 
 # Progress bars
-tqdm>=4.65.0
+tqdm~=4.66
 
 # Optional: CO-OPS observations for validation
-# pip install searvey>=0.3.0
+# pip install searvey~=0.3
 
 # Optional: Advanced visualization
-# pip install cartopy>=0.21.0
-# pip install cmocean>=3.0.0
+# pip install cartopy~=0.23
+# pip install cmocean~=4.0

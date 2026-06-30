@@ -1,5 +1,7 @@
 # STOFS-GNN: Graph Neural Network Surrogate for Storm Surge Forecasting
 
+[![CI](https://github.com/mansurjisan/stofs_surrogate/actions/workflows/ci.yml/badge.svg)](https://github.com/mansurjisan/stofs_surrogate/actions/workflows/ci.yml)
+
 ![STOFS-GNN Banner](docs/figures/banner.png)
 
 A physics-informed deep learning surrogate for NOAA's Surge and Tide Operational Forecast System (STOFS-2D Global), enabling 48h storm surge forecasts over the Mid-Atlantic region in ~3 seconds on a single GPU. Built on MeshGraphNet with shallow water equation (SWE)-inspired message passing.

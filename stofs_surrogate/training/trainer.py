@@ -13,9 +13,8 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch_geometric.loader import DataLoader as PyGDataLoader
-import numpy as np
 from pathlib import Path
-from typing import Optional, Dict, List, Callable
+from typing import Optional, Dict, List
 import logging
 import time
 from tqdm import tqdm

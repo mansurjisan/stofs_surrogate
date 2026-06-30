@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "mlops/**"]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-test:
+    name: lint + test (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install CPU PyTorch + package (with dev extras)
+        run: |
+          python -m pip install --upgrade pip
+          # CPU-only torch keeps CI fast and free (no CUDA wheels pulled in).
+          pip install "torch~=2.5" --index-url https://download.pytorch.org/whl/cpu
+          # Package + runtime deps (torch already satisfied) + dev tools (ruff, pytest).
+          pip install -e ".[dev]"
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Test (pytest)
+        run: pytest -q

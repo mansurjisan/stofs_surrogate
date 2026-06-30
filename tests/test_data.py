@@ -1,13 +1,11 @@
 """Tests for data loading and preprocessing."""
 
-import pytest
 import numpy as np
 
 
 def test_mesh_connectivity():
     """Test mesh edge computation."""
     # Simple triangular mesh
-    n_nodes = 4
     triangles = np.array([[0, 1, 2], [1, 2, 3]])
 
     # Extract edges from triangles
