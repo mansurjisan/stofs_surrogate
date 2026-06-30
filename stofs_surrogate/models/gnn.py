@@ -7,7 +7,6 @@ Shallow Water Equation dynamics on unstructured meshes.
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch_geometric.nn import MessagePassing
 from torch_geometric.data import Data
 from typing import Optional, Tuple
@@ -81,8 +80,10 @@ class GraphNetworkBlock(MessagePassing):
     ):
         super().__init__(aggr='add')
 
-        self.node_dim = node_dim
-        self.edge_dim = edge_dim
+        # NOTE: do not store these as self.node_dim / self.edge_dim --
+        # MessagePassing reserves `node_dim` for the propagation axis (default -2),
+        # and shadowing it makes propagate() index a non-existent tensor dimension.
+        # The feature dims are only needed to size the MLPs below.
 
         # Edge update MLP
         self.edge_mlp = MLPBlock(
