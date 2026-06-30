@@ -21,8 +21,8 @@ outputs/              Checkpoints, figures, logs (git-ignored)
 |---|---|
 | `models/gnn.py` | GNN architectures: `STOFSSurrogateGNN` (MeshGraphNet encoder/processor/decoder), `SimpleMeshGraphNet`, the `GraphNetworkBlock` message-passing layer, and the `create_model` factory. |
 | `data/` | `mesh.py` (ADCIRC mesh reader / graph conversion), `dataset.py` (synthetic + STOFS datasets), `preprocessing.py`. |
-| `training/` | `trainer.py` — training loop, checkpointing, evaluation, optional experiment-tracking hooks. |
-| `inference/` | Shared inference utilities. The active rollout/ensemble entry points currently live in `scripts/` (see below). |
+| `training/` | `trainer.py` (training loop, checkpointing), `tracking.py` (MLflow/W&B tracking abstraction), `registry.py` (MLflow Model Registry + lineage). |
+| `inference/` | `Predictor` (load checkpoint + autoregressive rollout) and `EnsemblePredictor` (perturbed-forcing ensemble + statistics). Some production rollout scripts in `scripts/` still embed their model inline. |
 | `visualization/` | `plots.py` — rollout and station time-series plotting. |
 
 The package `__init__` re-exports the model classes and `create_model`, so

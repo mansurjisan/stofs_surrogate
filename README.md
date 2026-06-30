@@ -107,6 +107,30 @@ MLFLOW_ALLOW_FILE_STORE=true mlflow ui       # browse the "stofs-smoke" experime
 Choose the backend per run with `--tracker mlflow` (default), `--tracker wandb`, or
 `--tracker none`.
 
+## Inference and model registry
+
+Reusable inference lives in `stofs_surrogate/inference/`: `Predictor` loads a checkpoint
+and runs an autoregressive rollout, and `EnsemblePredictor` runs a perturbed-forcing
+ensemble with mean/std/percentile statistics.
+
+```python
+from stofs_surrogate.inference import Predictor
+
+predictor = Predictor.from_checkpoint("outputs/checkpoints/best_model.pt")
+forecast = predictor.rollout(state, node_features, edge_index, edge_attr, num_steps=48)
+```
+
+Trained models are registered in the MLflow Model Registry with full lineage — git SHA,
+config, validation metrics, and a training-data manifest hash:
+
+```bash
+python scripts/register_model.py --checkpoint best_model.pt \
+    --tracking-uri sqlite:///mlflow.db --name stofs-gnn-midatlantic --alias staging
+```
+
+(The production 25k rollout/ensemble scripts embed their physics-informed model inline;
+migrating them onto `Predictor` is tracked as follow-up.)
+
 ## Repository Structure
 
 - `stofs_surrogate/` — Python package (model, data, training, inference, visualization)
