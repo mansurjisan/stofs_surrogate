@@ -89,6 +89,24 @@ Input (27 features per node)
 ![Ensemble Forecasts](docs/figures/ensemble_station_panel.png)
 *20-member ensemble via perturbed meteorological forcing (wind, pressure) and initial conditions. Blue: GNN control forecast. Green: STOFS truth. Shading: ensemble spread. Strong skill in protected bays (Baltimore R=0.99, Annapolis R=0.95); wider spread at exposed coastal stations reflects forcing sensitivity.*
 
+## Experiment tracking
+
+Training runs are tracked through a small backend-agnostic abstraction
+(`stofs_surrogate/training/tracking.py`) with **MLflow** as the default (Weights & Biases
+optional). Each run logs the resolved config, per-epoch train/val loss and learning rate,
+the git commit SHA (for lineage), and the final model checkpoint as an artifact.
+
+Verify the full pipeline end-to-end on CPU with synthetic data — no GPU or NOAA data needed:
+
+```bash
+pip install -e ".[dev]"                      # includes mlflow
+python scripts/smoke_train.py                # ~2 epochs of synthetic data -> ./mlruns
+MLFLOW_ALLOW_FILE_STORE=true mlflow ui       # browse the "stofs-smoke" experiment at localhost:5000
+```
+
+Choose the backend per run with `--tracker mlflow` (default), `--tracker wandb`, or
+`--tracker none`.
+
 ## Repository Structure
 
 - `stofs_surrogate/` — Python package (model, data, training, inference, visualization)

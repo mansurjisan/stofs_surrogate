@@ -142,6 +142,10 @@ data/
 outputs/
 plots/
 
+# MLflow local tracking store
+mlruns/
+mlflow.db
+
 # Misc
 phase1
 phase1_completion_report.txt

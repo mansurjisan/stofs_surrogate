@@ -19,6 +19,8 @@ import logging
 import time
 from tqdm import tqdm
 
+from stofs_surrogate.training.tracking import Tracker, NoOpTracker, make_tracker, get_git_sha
+
 logger = logging.getLogger(__name__)
 
 
@@ -53,6 +55,9 @@ class Trainer:
         use_wandb: bool = False,
         wandb_project: str = 'stofs-surrogate',
         wandb_run_name: Optional[str] = None,
+        # Experiment tracking
+        tracker: Optional[Tracker] = None,
+        config: Optional[Dict] = None,
     ):
         """
         Initialize trainer.
@@ -133,26 +138,18 @@ class Trainer:
         self.train_losses: List[float] = []
         self.val_losses: List[float] = []
 
-        # Setup W&B
-        if use_wandb:
-            try:
-                import wandb
-                wandb.init(
-                    project=wandb_project,
-                    name=wandb_run_name,
-                    config={
-                        'model': type(model).__name__,
-                        'num_params': sum(p.numel() for p in model.parameters()),
-                        'num_epochs': num_epochs,
-                        'grad_clip': grad_clip,
-                        'mixed_precision': mixed_precision,
-                    }
-                )
-                self.wandb = wandb
-            except ImportError:
-                logger.warning("wandb not installed, disabling W&B logging")
-                self.use_wandb = False
-                self.wandb = None
+        # Experiment tracking (MLflow by default via make_tracker; W&B optional).
+        # Back-compat: with no explicit tracker but use_wandb=True, route through W&B.
+        if tracker is not None:
+            self.tracker = tracker
+        elif use_wandb:
+            self.tracker = make_tracker('wandb', project=wandb_project)
+        else:
+            self.tracker = NoOpTracker()
+        self.config = config or {}
+        self.run_name = wandb_run_name
+        # Optionally populated by a rollout eval and logged at the end of train().
+        self.lead_time_rmse: Optional[Dict[str, float]] = None
 
         # Setup TensorBoard
         try:
@@ -171,6 +168,25 @@ class Trainer:
         """
         logger.info(f"Starting training for {self.num_epochs} epochs")
         logger.info(f"Device: {self.device}, Mixed precision: {self.mixed_precision}")
+
+        # Start the tracking run; log the resolved config + code lineage (git SHA).
+        self.tracker.start_run(
+            run_name=self.run_name,
+            tags={'git_sha': get_git_sha(), 'model': type(self.model).__name__},
+        )
+        params = dict(self.config)
+        params.update({
+            'model_class': type(self.model).__name__,
+            'num_params': sum(p.numel() for p in self.model.parameters()),
+            'num_epochs': self.num_epochs,
+            'grad_clip': self.grad_clip,
+            'grad_accumulation_steps': self.grad_accumulation_steps,
+            'mixed_precision': self.mixed_precision,
+            'optimizer': type(self.optimizer).__name__,
+            'learning_rate': self.optimizer.param_groups[0]['lr'],
+            'device': self.device,
+        })
+        self.tracker.log_params(params)
 
         start_time = time.time()
 
@@ -216,12 +232,11 @@ class Trainer:
             msg += f" | LR: {lr:.2e}"
             logger.info(msg)
 
-            # W&B logging
-            if self.use_wandb:
-                log_dict = {'train_loss': train_loss, 'lr': lr, 'epoch': epoch}
-                if val_loss is not None:
-                    log_dict['val_loss'] = val_loss
-                self.wandb.log(log_dict)
+            # Experiment tracking (per-epoch metrics)
+            metrics = {'train_loss': train_loss, 'lr': lr}
+            if val_loss is not None:
+                metrics['val_loss'] = val_loss
+            self.tracker.log_metrics(metrics, step=epoch)
 
         # Training complete
         elapsed = time.time() - start_time
@@ -230,6 +245,21 @@ class Trainer:
 
         # Save final model
         self._save_checkpoint('final_model.pt')
+
+        # Per-lead-time RMSE, if a rollout eval populated it.
+        # TODO(user): compute true t+1/6/12/24/48h RMSE via an autoregressive rollout on
+        #   the real validation set (the synthetic single-step dataset cannot produce it).
+        if self.lead_time_rmse:
+            self.tracker.log_metrics(
+                {f'val_rmse/t+{h}h': v for h, v in self.lead_time_rmse.items()}
+            )
+
+        # Log final (and best) checkpoints as run artifacts, then close the run.
+        for name in ('final_model.pt', 'best_model.pt'):
+            ckpt = self.checkpoint_dir / name
+            if ckpt.exists():
+                self.tracker.log_artifact(str(ckpt))
+        self.tracker.end_run()
 
         return {
             'train_losses': self.train_losses,

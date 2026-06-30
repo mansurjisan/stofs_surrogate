@@ -48,6 +48,7 @@ dev = [
     "ruff>=0.6",
     "black>=23.0.0",
     "isort>=5.12.0",
+    "mlflow~=3.14",
 ]
 viz = [
     "cartopy>=0.21.0",
@@ -56,6 +57,14 @@ viz = [
 obs = [
     # CO-OPS tide-gauge observations for validation/monitoring (used in a later phase).
     "searvey~=0.3",
+]
+tracking = [
+    # MLflow is the default experiment-tracking backend.
+    "mlflow~=3.14",
+]
+wandb = [
+    # Optional Weights & Biases backend (select with output.tracker: wandb).
+    "wandb>=0.16",
 ]
 
 [project.urls]
