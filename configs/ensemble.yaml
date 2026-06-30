@@ -1,45 +1,40 @@
 # Ensemble forecast configuration
+# =================================
+# Inherits domain, mesh, normalization, model, and paths from the canonical config.
+# `base:` documents the intended inheritance; nothing in the repo resolves it
+# automatically (the scripts take CLI args). Only ensemble-specific keys live here --
+# values that must match the canonical config are NOT duplicated.
+base: train_default.yaml
 
 ensemble:
-  n_members: 50
-  forecast_hours: 48
+  n_members: 20         # README: "20-member ensemble" (the old config defaulted to 50)
+  # TODO(user): confirm the production default. README figures used 20 members; the
+  #             previous ensemble.yaml said 50. Set to whatever produced the figures.
+  forecast_hours: 48    # matches the README 48h forecast horizon
 
-# Perturbation settings
+# Perturbed meteorological forcing (README: "perturbed wind, pressure")
 perturbations:
   wind:
     type: "gaussian"
-    magnitude: 2.0  # m/s
-    correlation_time: 6  # hours
+    magnitude: 2.0        # m/s
+    correlation_time: 6   # hours
   pressure:
     type: "gaussian"
-    magnitude: 200  # Pa
+    magnitude: 200        # Pa
     correlation_time: 12  # hours
 
-# Station extraction
+# Tide-gauge stations for ensemble extraction.
+# TODO(user): the README validation/ensemble figures cite Baltimore, Philadelphia, and
+#             Annapolis, none of which are in this list. Reconcile this station set with
+#             the stations actually shown in the figures.
 stations:
-  - name: "Atlantic City"
-    id: "8534720"
-    lon: -74.4181
-    lat: 39.3550
-  - name: "Sandy Hook"
-    id: "8531680"
-    lon: -74.0092
-    lat: 40.4669
-  - name: "The Battery"
-    id: "8518750"
-    lon: -74.0142
-    lat: 40.7003
-  - name: "Lewes, DE"
-    id: "8557380"
-    lon: -75.1192
-    lat: 38.7828
-  - name: "Cape May"
-    id: "8536110"
-    lon: -74.9597
-    lat: 38.9683
+  - {name: "Atlantic City", id: "8534720", lon: -74.4181, lat: 39.3550}
+  - {name: "Sandy Hook",    id: "8531680", lon: -74.0092, lat: 40.4669}
+  - {name: "The Battery",   id: "8518750", lon: -74.0142, lat: 40.7003}
+  - {name: "Lewes, DE",     id: "8557380", lon: -75.1192, lat: 38.7828}
+  - {name: "Cape May",      id: "8536110", lon: -74.9597, lat: 38.9683}
 
-# Output
 output:
   save_all_members: false
-  save_statistics: true  # mean, std, percentiles
+  save_statistics: true   # mean, std, percentiles
   percentiles: [5, 25, 50, 75, 95]

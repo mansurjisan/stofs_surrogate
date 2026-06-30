@@ -1,0 +1,36 @@
+# Keep the build context small and reproducible.
+.git
+.github
+.claude
+
+# Python caches / build artifacts
+**/__pycache__
+*.py[cod]
+*.egg-info
+build/
+dist/
+.eggs/
+
+# Stale / local-only
+src/
+notebooks/
+phase1
+phase1_completion_report.txt
+
+# Large data + outputs (regenerated, not needed to build/test)
+data/
+outputs/
+plots/
+docs/figures/
+docs/archived/
+*.nc
+*.npz
+*.png
+
+# Tooling caches
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.venv
+venv/
+*.log

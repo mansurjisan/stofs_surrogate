@@ -23,27 +23,48 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Atmospheric Science",
 ]
 
+# Compatible-release (~=) pins on the minor version: reproducible for CI/Docker while
+# tolerating patch updates across Python 3.10/3.11. torch-scatter / torch-sparse are
+# intentionally absent -- this package only uses torch_geometric (Data, MessagePassing,
+# DataLoader), whose scatter ops are built into PyG >= 2.5. See requirements.txt for the
+# CPU-only install note.
+# TODO(user): validate these anchors against the original H100 training stack; consider a
+#   pip-compile lockfile for an exact, fully reproducible environment.
 dependencies = [
-    "torch>=2.0.0",
-    "torch-geometric>=2.4.0",
-    "numpy>=1.24.0",
-    "scipy>=1.10.0",
-    "netCDF4>=1.6.0",
-    "matplotlib>=3.7.0",
-    "pandas>=2.0.0",
-    "tqdm>=4.65.0",
-    "xarray>=2023.0.0",
+    "torch~=2.5",
+    "torch-geometric~=2.6",
+    "numpy~=2.1",
+    "scipy~=1.13",
+    "netCDF4~=1.7",
+    "matplotlib~=3.9",
+    "pandas~=2.2",
+    "tqdm~=4.66",
+    "xarray~=2024.6",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0.0",
+    "pytest>=8.0",
+    "ruff>=0.6",
     "black>=23.0.0",
     "isort>=5.12.0",
+    "mlflow~=3.14",
 ]
 viz = [
     "cartopy>=0.21.0",
     "cmocean>=3.0.0",
+]
+obs = [
+    # CO-OPS tide-gauge observations for validation/monitoring (used in a later phase).
+    "searvey~=0.3",
+]
+tracking = [
+    # MLflow is the default experiment-tracking backend.
+    "mlflow~=3.14",
+]
+wandb = [
+    # Optional Weights & Biases backend (select with output.tracker: wandb).
+    "wandb>=0.16",
 ]
 
 [project.urls]
@@ -62,3 +83,18 @@ target-version = ["py310"]
 [tool.isort]
 profile = "black"
 line_length = 100
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+# Ruff's default rule set (pyflakes F + pycodestyle E4/E7/E9): sensible, not over-tuned.
+# The package and tests are held to this fully. Research/operational scripts get the
+# lighter profile below but still fail on real-bug rules such as F821 (undefined name).
+
+[tool.ruff.lint.per-file-ignores]
+# scripts/ are research + operational utilities, not the shipped package: allow late
+# imports after sys.path bootstrapping (E402), bare excepts in download/retry loops
+# (E722), ambiguous names (E741), and throwaway imports/vars/f-strings.
+"scripts/**" = ["E402", "E722", "E741", "F401", "F541", "F811", "F841"]

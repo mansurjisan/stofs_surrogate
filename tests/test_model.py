@@ -1,8 +1,6 @@
 """Tests for GNN model architecture."""
 
-import pytest
 import torch
-import numpy as np
 
 
 def test_graph_block_shape():

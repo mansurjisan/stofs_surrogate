@@ -7,6 +7,7 @@ Uses the existing mesh_25k.npz file.
 import os
 import gc
 import time
+from pathlib import Path
 import numpy as np
 from netCDF4 import Dataset as NCDataset
 from scipy.ndimage import map_coordinates

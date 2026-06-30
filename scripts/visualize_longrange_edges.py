@@ -7,6 +7,7 @@ Shows the original mesh with new long-range connections overlaid.
 
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 from pathlib import Path
 
 # Paths

@@ -1,5 +1,7 @@
 # STOFS-GNN: Graph Neural Network Surrogate for Storm Surge Forecasting
 
+[![CI](https://github.com/mansurjisan/stofs_surrogate/actions/workflows/ci.yml/badge.svg)](https://github.com/mansurjisan/stofs_surrogate/actions/workflows/ci.yml)
+
 ![STOFS-GNN Banner](docs/figures/banner.png)
 
 A physics-informed deep learning surrogate for NOAA's Surge and Tide Operational Forecast System (STOFS-2D Global), enabling 48h storm surge forecasts over the Mid-Atlantic region in ~3 seconds on a single GPU. Built on MeshGraphNet with shallow water equation (SWE)-inspired message passing.
@@ -87,12 +89,32 @@ Input (27 features per node)
 ![Ensemble Forecasts](docs/figures/ensemble_station_panel.png)
 *20-member ensemble via perturbed meteorological forcing (wind, pressure) and initial conditions. Blue: GNN control forecast. Green: STOFS truth. Shading: ensemble spread. Strong skill in protected bays (Baltimore R=0.99, Annapolis R=0.95); wider spread at exposed coastal stations reflects forcing sensitivity.*
 
+## Experiment tracking
+
+Training runs are tracked through a small backend-agnostic abstraction
+(`stofs_surrogate/training/tracking.py`) with **MLflow** as the default (Weights & Biases
+optional). Each run logs the resolved config, per-epoch train/val loss and learning rate,
+the git commit SHA (for lineage), and the final model checkpoint as an artifact.
+
+Verify the full pipeline end-to-end on CPU with synthetic data — no GPU or NOAA data needed:
+
+```bash
+pip install -e ".[dev]"                      # includes mlflow
+python scripts/smoke_train.py                # ~2 epochs of synthetic data -> ./mlruns
+MLFLOW_ALLOW_FILE_STORE=true mlflow ui       # browse the "stofs-smoke" experiment at localhost:5000
+```
+
+Choose the backend per run with `--tracker mlflow` (default), `--tracker wandb`, or
+`--tracker none`.
+
 ## Repository Structure
 
 - `stofs_surrogate/` — Python package (model, data, training, inference, visualization)
+- `configs/` — Training and ensemble configuration (architecture + hyperparameters)
 - `scripts/` — Training, preprocessing, rollout, and visualization scripts
-- `scripts/archived/` — Historical development scripts
 - `docs/figures/` — Result figures used in README
+
+See [`docs/REPO_STRUCTURE.md`](docs/REPO_STRUCTURE.md) for the full package layout. Earlier development scripts are preserved on the `dev-history` branch.
 
 Training requires STOFS-2D Global output ([NOAA S3](https://noaa-nos-stofs2d-pds.s3.amazonaws.com/index.html)) and GFS forcing ([NOAA NOMADS](https://nomads.ncep.noaa.gov/)). Preprocessed data available upon request.
 
