@@ -131,6 +131,24 @@ python scripts/register_model.py --checkpoint best_model.pt \
 (The production 25k rollout/ensemble scripts embed their physics-informed model inline;
 migrating them onto `Predictor` is tracked as follow-up.)
 
+## Serving
+
+A FastAPI service (`stofs_surrogate/serving/app.py`) wraps the `Predictor`: `GET /health`,
+`GET /metadata` (model identity, git SHA, registry skill), `POST /predict`, and
+`POST /predict/batch`. With no model configured it serves a small synthetic demo model, so
+it runs without a checkpoint.
+
+```bash
+docker build -f Dockerfile.serve -t stofs-gnn-serve .
+docker run --rm -p 8000:8000 stofs-gnn-serve            # or: uvicorn stofs_surrogate.serving.app:app
+curl localhost:8000/health
+```
+
+Point it at a trained model with `STOFS_MODEL_CHECKPOINT` / `STOFS_MODEL_KWARGS` (and
+`STOFS_REGISTRY_URI` + `STOFS_REGISTRY_MODEL` to surface registry skill in `/metadata`).
+CPU inference on the subsampled mesh is interactive (sub-second for a short rollout on the
+demo model); a full 48h forecast on the 25K-node mesh is GPU-accelerated.
+
 ## Repository Structure
 
 - `stofs_surrogate/` — Python package (model, data, training, inference, visualization)

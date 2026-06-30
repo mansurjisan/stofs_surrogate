@@ -1,0 +1,29 @@
+# CPU serving image: FastAPI + uvicorn.
+# Build:  docker build -f Dockerfile.serve -t stofs-gnn-serve .
+# Run:    docker run --rm -p 8000:8000 stofs-gnn-serve
+# Configure the served model with STOFS_MODEL_CHECKPOINT / STOFS_MODEL_KWARGS (else a
+# small synthetic demo model is served).
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# CPU torch first (own layer, cached independently of source changes).
+RUN pip install --upgrade pip \
+    && pip install "torch~=2.5" --index-url https://download.pytorch.org/whl/cpu
+
+COPY pyproject.toml requirements.txt README.md ./
+COPY stofs_surrogate ./stofs_surrogate
+RUN pip install -e ".[serving]"
+
+COPY . .
+
+EXPOSE 8000
+CMD ["uvicorn", "stofs_surrogate.serving.app:app", "--host", "0.0.0.0", "--port", "8000"]

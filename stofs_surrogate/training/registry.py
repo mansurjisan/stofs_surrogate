@@ -91,6 +91,11 @@ class ModelRegistry:
             self._client.set_registered_model_alias(name, alias, version.version)
         return version
 
+    def get_lineage_by_alias(self, name: str, alias: str) -> Dict:
+        """Lineage for the version currently holding ``alias`` (e.g. ``"production"``)."""
+        model_version = self._client.get_model_version_by_alias(name, alias)
+        return self.get_lineage(name, model_version.version)
+
     def get_lineage(self, name: str, version: str) -> Dict:
         """Return the lineage (tags, params, metrics) recorded for a model version."""
         model_version = self._client.get_model_version(name, version)

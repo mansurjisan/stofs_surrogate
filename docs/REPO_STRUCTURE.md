@@ -23,6 +23,7 @@ outputs/              Checkpoints, figures, logs (git-ignored)
 | `data/` | `mesh.py` (ADCIRC mesh reader / graph conversion), `dataset.py` (synthetic + STOFS datasets), `preprocessing.py`. |
 | `training/` | `trainer.py` (training loop, checkpointing), `tracking.py` (MLflow/W&B tracking abstraction), `registry.py` (MLflow Model Registry + lineage). |
 | `inference/` | `Predictor` (load checkpoint + autoregressive rollout) and `EnsemblePredictor` (perturbed-forcing ensemble + statistics). Some production rollout scripts in `scripts/` still embed their model inline. |
+| `serving/` | `app.py` — FastAPI inference service (`/health`, `/metadata`, `/predict`, `/predict/batch`) over the `Predictor`. |
 | `visualization/` | `plots.py` — rollout and station time-series plotting. |
 
 The package `__init__` re-exports the model classes and `create_model`, so
