@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars and edit. NEVER commit terraform.tfvars, *.tfstate, or secrets.
+aws_region  = "us-east-1"
+project     = "stofs-gnn"
+environment = "dev"
+
+# S3 bucket names must be globally unique -- change these.
+artifacts_bucket_name = "stofs-gnn-artifacts-CHANGEME"
+data_bucket_name      = "stofs-gnn-data-CHANGEME"
+
+# Small CPU instance by default; use e.g. "g4dn.xlarge" for GPU inference.
+inference_instance_type = "t3.large"
+
+# Restrict this to your own IP (e.g. "203.0.113.4/32"); 0.0.0.0/0 exposes the service.
+service_ingress_cidr = "0.0.0.0/0"

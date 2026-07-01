@@ -1,0 +1,15 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+
+# Local variable files may contain secrets -- commit only terraform.tfvars.example
+terraform.tfvars
+*.auto.tfvars
+override.tf
+override.tf.json
+
+# Keep .terraform.lock.hcl committed (it pins provider versions).

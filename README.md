@@ -165,6 +165,13 @@ python scripts/monitor.py     # -> outputs/monitoring/{drift_report.html, metric
 The observations client has a synthetic fallback for CI/offline; the live CO-OPS pull (via
 `searvey`) is a documented `TODO(user)`.
 
+## Infrastructure
+
+`infra/terraform/` provisions the serving stack on AWS (S3 for artifacts + data, ECR, an
+EC2 inference host, CloudWatch). It is **validate/plan only** — CI runs `terraform fmt`,
+`init -backend=false`, and `validate` (no credentials, no `apply`). See
+[`infra/README.md`](infra/README.md) for the cost warning and usage.
+
 ## Repository Structure
 
 - `stofs_surrogate/` — Python package (model, data, training, inference, visualization)

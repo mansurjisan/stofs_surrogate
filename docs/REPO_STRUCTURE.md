@@ -10,6 +10,7 @@ stofs_surrogate/      Python package (importable: `import stofs_surrogate`)
 configs/              Training and ensemble configuration (YAML)
 scripts/              CLI scripts: download, preprocess, train, rollout, visualize
 tests/                Unit tests (pytest)
+infra/                Terraform IaC for cloud deployment (validate/plan only)
 docs/                 Documentation and README figures
 data/                 Local data (git-ignored)
 outputs/              Checkpoints, figures, logs (git-ignored)
