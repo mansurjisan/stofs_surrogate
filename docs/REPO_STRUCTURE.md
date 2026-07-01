@@ -24,6 +24,7 @@ outputs/              Checkpoints, figures, logs (git-ignored)
 | `training/` | `trainer.py` (training loop, checkpointing), `tracking.py` (MLflow/W&B tracking abstraction), `registry.py` (MLflow Model Registry + lineage). |
 | `inference/` | `Predictor` (load checkpoint + autoregressive rollout) and `EnsemblePredictor` (perturbed-forcing ensemble + statistics). Some production rollout scripts in `scripts/` still embed their model inline. |
 | `serving/` | `app.py` — FastAPI inference service (`/health`, `/metadata`, `/predict`, `/predict/batch`) over the `Predictor`. |
+| `monitoring/` | CO-OPS ground-truth skill (`skill.py`), drift reports (`drift.py`, KS/PSI + optional Evidently), observations client, Prometheus metrics. |
 | `visualization/` | `plots.py` — rollout and station time-series plotting. |
 
 The package `__init__` re-exports the model classes and `create_model`, so

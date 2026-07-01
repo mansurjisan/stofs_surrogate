@@ -73,6 +73,12 @@ serving = [
     "fastapi>=0.110",
     "uvicorn>=0.30",
 ]
+monitoring = [
+    # Richer drift reports (Evidently) + live CO-OPS observations (searvey).
+    # scipy/pandas (the built-in KS/PSI drift path) are already core deps.
+    "evidently>=0.7",
+    "searvey>=0.4",
+]
 
 [project.urls]
 Homepage = "https://github.com/mansurjisan/stofs_surrogate"

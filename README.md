@@ -149,6 +149,22 @@ Point it at a trained model with `STOFS_MODEL_CHECKPOINT` / `STOFS_MODEL_KWARGS`
 CPU inference on the subsampled mesh is interactive (sub-second for a short rollout on the
 demo model); a full 48h forecast on the 25K-node mesh is GPU-accelerated.
 
+## Monitoring and drift
+
+Water level has real ground truth (NOAA CO-OPS tide gauges), so forecasts can be scored
+against observations. `stofs_surrogate/monitoring/` computes rolling RMSE / correlation /
+bias per station (`skill.py`) and flags skill degradation past a threshold, and reports
+input/prediction drift (`drift.py`, KS test + PSI — with a richer Evidently report when
+`.[monitoring]` is installed). `scripts/monitor.py` runs the whole loop and emits Prometheus
+metrics:
+
+```bash
+python scripts/monitor.py     # -> outputs/monitoring/{drift_report.html, metrics.prom}
+```
+
+The observations client has a synthetic fallback for CI/offline; the live CO-OPS pull (via
+`searvey`) is a documented `TODO(user)`.
+
 ## Repository Structure
 
 - `stofs_surrogate/` — Python package (model, data, training, inference, visualization)
